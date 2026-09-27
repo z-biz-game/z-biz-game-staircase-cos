@@ -1,0 +1,187 @@
+/* One dark table, one warm accent. No font files, no images: the only drawing this game
+   does is procedural, in js/view.js. */
+
+:root {
+  --bg: #14161a;
+  --panel: #1b1f26;
+  --ink: #e3e8f0;
+  --muted: #9aa5b4;
+  --line: rgba(226, 232, 240, 0.12);
+  --gold: #e0a63c;
+  --gold-dark: #a97721;
+  --good: #6ea06e;
+  --bad: #c96a5e;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: baseline;
+  padding: 12px 18px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.brand-mark { color: var(--gold); font-size: 16px; }
+.brand small { color: var(--muted); font-size: 11px; letter-spacing: 0.18em; }
+
+.modes { display: flex; gap: 6px; }
+.modes button, .controls button, .shelf button, .curtain-actions button, .about button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 6px 11px;
+  cursor: pointer;
+}
+.modes button:hover, .controls button:hover:not(:disabled), .shelf button:hover:not(:disabled) {
+  border-color: rgba(224, 166, 60, 0.55);
+}
+.modes button[aria-current="true"] { background: #232a34; border-color: var(--gold); color: #f6e3bd; }
+.controls button.primary { background: var(--gold); border-color: var(--gold-dark); color: #201708; font-weight: 600; }
+button:disabled { opacity: 0.42; cursor: not-allowed; }
+
+.totals { margin: 0 0 0 auto; color: var(--muted); font-size: 12px; }
+.totals b { color: var(--ink); }
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(260px, 340px);
+  gap: 16px;
+  padding: 14px 18px 22px;
+  align-items: start;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.board { position: relative; }
+
+canvas#board {
+  display: block;
+  width: 100%;
+  height: min(62vh, 520px);
+  min-height: 280px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  touch-action: none;
+}
+
+.hint-line { min-height: 20px; margin: 8px 2px 0; font-size: 13px; color: var(--muted); }
+.hint-line b { color: var(--gold); }
+
+.curtain {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 12, 16, 0.72);
+  border-radius: var(--radius);
+}
+/* `[hidden]` alone does nothing here: `display: grid` above beats the UA's
+   `[hidden] { display: none }`, so the overlay stayed invisible-but-clickable and swallowed
+   every pointer event on the canvas. Measured in headless Chrome, 2026-09-27. */
+.curtain[hidden] { display: none; }
+.curtain-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 22px;
+  text-align: center;
+  max-width: 86%;
+}
+.stars { margin: 0; font-size: 30px; color: var(--gold); letter-spacing: 0.12em; }
+.curtain-card h2 { margin: 6px 0 4px; font-size: 18px; }
+.tally { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.tally b { color: var(--ink); }
+.curtain-actions { display: flex; gap: 8px; justify-content: center; }
+
+.panel { display: flex; flex-direction: column; gap: 12px; }
+.crumbs { margin: 0; font-size: 14px; }
+.crumbs b { float: right; color: var(--muted); font-weight: 500; font-size: 12px; }
+.band { color: #7f8a99; font-size: 11px; }
+
+.readout {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+.readout div {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 7px 9px;
+}
+.readout dt { font-size: 11px; color: var(--muted); }
+.readout dd { margin: 2px 0 0; font-size: 19px; }
+.readout div.par dd { color: var(--gold); }
+.readout div.steps dd { color: #86b0d6; }
+.readout dt small { font-size: 10px; color: #74808f; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 6px; }
+.legend { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.65; }
+.legend b { color: #cfd8e4; }
+.legend i { color: var(--gold); font-style: normal; }
+
+.shelf { display: flex; flex-direction: column; gap: 6px; }
+.shelf p.tier { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.shelf button { min-width: 34px; }
+.shelf:not(:empty) { flex-direction: column; }
+.shelf p + p { margin-top: 4px; }
+.shelf button.here { outline: 2px solid var(--gold); }
+.shelf button.done { border-color: rgba(110, 160, 110, 0.7); }
+.shelf button.perfect { background: #2a3a2c; border-color: var(--good); }
+.shelf button.wide { width: 100%; }
+.shelf .row { display: flex; flex-wrap: wrap; gap: 6px; }
+.shelf button small { color: var(--muted); font-size: 10px; }
+
+.about { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+.about summary { cursor: pointer; color: #cfd8e4; }
+.about p { line-height: 1.7; }
+.about code { background: #20252d; padding: 1px 5px; border-radius: 4px; color: #d7e2f0; }
+.about .save { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  background: #262c35;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  max-width: 84vw;
+}
+.toast[hidden] { display: none; }
+
+@media (max-width: 780px) {
+  .stage { grid-template-columns: 1fr; }
+  canvas#board { height: 58vh; }
+  .readout { grid-template-columns: repeat(2, 1fr); }
+  .totals { margin-left: 0; width: 100%; }
+}

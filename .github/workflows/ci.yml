@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The rule, the theorem census, the partition enumeration, the solver and the shipped pool
+  # are all pure ES modules: no browser and no install step. Three rows are the reason this
+  # job exists:
+  #   * deal.test.mjs — every partition of 3 / 6 / 10 / 15 cards is dealt to exhaustion and
+  #     reaches its staircase (stuck = 0,0,0,0), the counts are the public p(n) =
+  #     3 / 11 / 42 / 176, the worst runs are 2 / 6 / 12 / 20, and all 77 openings of the
+  #     non-triangular 12 cards fall into periodic orbits instead;
+  #   * solve.test.mjs — the hardest opening of T_k costs exactly k operations, proved by a
+  #     backwards BFS over the whole p(n) action graph and cross-checked against per-start
+  #     BFS;
+  #   * library.test.mjs — re-solves every lot in js/data/lots.js from its own serialised
+  #     spec, so a hand-edited par or a stale bake fails the build instead of shipping.
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f"; done
+      - name: Suites
+        run: for f in test/*.test.mjs; do echo "::group::$f"; node "$f"; echo "::endgroup::"; done
+
+  # The shell is only proven by driving a real page with real mouse events: the canvas hit
+  # test, the click-pair merge, the drag split and the save file all live behind `window.stair`.
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Headless playtest
+        env:
+          SKIP_UNIT: 1
+          WD_TIMEOUT: 240
+        run: bash tools/verify.sh
