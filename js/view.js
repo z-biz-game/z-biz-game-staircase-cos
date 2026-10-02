@@ -420,6 +420,31 @@ export function createView(canvas, { onAction, onPick } = {}) {
   canvas.addEventListener('pointerup', up);
   canvas.addEventListener('pointercancel', up);
 
+  // pointer 优先；没有 PointerEvent 的引擎（老 WebKit、部分桌面浏览器）必须还能玩，
+  // 所以 touch/mouse 落到同一组 down/move/up —— 命中换算与合法性检查不存在第二条路。
+  // 支持 pointer 时整段不绑：否则一次触摸会同时来 pointerdown 与 touchstart，点一下并两次。
+  if (!('PointerEvent' in window)) {
+    const wrap = (src, native, id) => ({
+      clientX: src.clientX, clientY: src.clientY, pointerId: id,
+      preventDefault: () => { if (typeof native.preventDefault === 'function') native.preventDefault(); },
+    });
+    const one = (native) => (native.touches && native.touches[0]) || (native.changedTouches && native.changedTouches[0]);
+    const viaTouch = (pick) => (native) => {
+      const t = one(native);
+      if (t) pick(wrap(t, native, 'touch'));
+    };
+    const touchStart = viaTouch(down);
+    const touchMove = viaTouch(move);
+    const touchEnd = viaTouch(up);
+    canvas.addEventListener('touchstart', touchStart, { passive: false });
+    canvas.addEventListener('touchmove', touchMove, { passive: false });
+    canvas.addEventListener('touchend', touchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', touchEnd, { passive: false });
+    canvas.addEventListener('mousedown', (ev) => down(wrap(ev, ev, 'mouse')));
+    canvas.addEventListener('mousemove', (ev) => move(wrap(ev, ev, 'mouse')));
+    canvas.addEventListener('mouseup', (ev) => up(wrap(ev, ev, 'mouse')));
+  }
+
   return {
     attach(next) {
       game = next;

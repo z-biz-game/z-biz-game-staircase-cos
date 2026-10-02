@@ -223,4 +223,41 @@ test('重开把时钟、缓冲、玩家位置一起复位：动画与局面都�
   eq(after.flashLeft, 0, '拒绝闪烁必须跟着消失');
 });
 
+test('没有 PointerEvent 时 touch/mouse 落到同一条命中路径，有 PointerEvent 时不许双触发', () => {
+  // 用 shoal-05：开局是 6 个单张堆，0/1/2 三堆都真实存在（shoal-04 只有一整垛）。
+  const openNoPointer = () => {
+    delete globalThis.PointerEvent;
+    return openLot(4);
+  };
+  const { view, canvas, game, picks } = openNoPointer();
+  const touch = (type, pt, list = 'touches') => canvas._fire(type, {
+    [list]: [{ clientX: pt.x, clientY: pt.y }],
+    changedTouches: [{ clientX: pt.x, clientY: pt.y }],
+  });
+  const before = game.piles.length;
+  const p0 = view.pilePoint(0);
+  const p1 = view.pilePoint(1);
+  touch('touchstart', p0);
+  touch('touchend', p0, 'changedTouches');
+  touch('touchstart', p1);
+  touch('touchend', p1, 'changedTouches');
+  eq(picks, [0, 1], '两次触摸必须落到 0/1 堆');
+  eq([game.moves, game.piles.length, game.piles.reduce((a, b) => a + b, 0)], [1, before - 1, 6],
+    `两次触摸必须真的并掉一堆：${JSON.stringify(game.piles)}`);
+
+  canvas._fire('mousedown', { clientX: p0.x, clientY: p0.y });
+  canvas._fire('mouseup', { clientX: p0.x, clientY: p0.y });
+  eq(picks, [0, 1, 0], '鼠标点击走同一个 pick()');
+
+  globalThis.PointerEvent = function PointerEvent() {};
+  const withPointer = openLot(4);
+  const q0 = withPointer.view.pilePoint(0);
+  touch.call(null, 'touchstart', q0);
+  touch.call(null, 'touchend', q0, 'changedTouches');
+  eq(withPointer.picks, [], '支持 pointer 的引擎里 touch 必须被完全忽略');
+  withPointer.canvas._fire('pointerdown', { clientX: q0.x, clientY: q0.y, pointerId: 1 });
+  withPointer.canvas._fire('pointerup', { clientX: q0.x, clientY: q0.y, pointerId: 1 });
+  eq(withPointer.picks, [0], '一次 pointer 点击命中一次，不多不少');
+});
+
 run();
