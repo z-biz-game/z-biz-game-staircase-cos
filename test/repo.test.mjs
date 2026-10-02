@@ -108,8 +108,13 @@ test('the manifest and the worker describe the same installable app that is on d
     eq(icon.sizes, `${w}x${h}`, `${icon.src} is labelled ${icon.sizes}`);
     ok(/\d{3,}x\d{3,}/.test(icon.sizes), `${icon.src} is too small to install with`);
   }
-  ok(/serviceWorker/.test(read('js/pwa.js')) && /navigator\.serviceWorker\.register\(/.test(read('js/pwa.js')),
-    'nothing registers the worker');
+  const pwa = read('js/pwa.js');
+  ok(/navigator\.serviceWorker/.test(pwa) && /\.register\(/.test(pwa), 'nothing registers the worker');
+  ok(/typeof sw\.register !== 'function'/.test(pwa),
+    'a webview that hands back navigator.serviceWorker === null must be skipped, not thrown through startup');
+  ok(/here !== 'http:' && here !== 'https:'/.test(pwa), 'file:// must skip registration');
+  ok(/if \(!res\.ok\) return \{ ok: false, reason: `http /.test(pwa),
+    'a 404 manifest must report its own status, not the icons check verdict');
   const sw = read('sw.js');
   ok(/caches\.open\(/.test(sw) && /VERSION/.test(sw), 'the worker must own a versioned cache');
   ok(/url\.origin !== self\.location\.origin/.test(sw), 'the worker must not intercept third-party requests');
