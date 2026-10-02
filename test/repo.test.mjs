@@ -80,6 +80,64 @@ test('the icons are real PNGs of the size their filename claims', () => {
   }
 });
 
+test('the desktop bundle ships real icons, and the containers say the sizes they carry', () => {
+  const pkg = JSON.parse(read('package.json'));
+  const shell = read('electron/main.cjs');
+  const DESKTOP = ['assets/build/icon-256.png', 'assets/build/icon.icns', 'assets/build/icon.ico'];
+  const gen = read('assets/gen/gen_art.py');
+  for (const f of DESKTOP) {
+    ok(statSync(join(root, f)).size > 0, `${f} is 0 bytes`);
+    ok(gen.includes(`'${f}'`), `${f} is shipped but the generator does not write it`);
+  }
+  eq([pkg.build.mac.icon, pkg.build.win.icon, pkg.build.linux.icon],
+    ['assets/build/icon.icns', 'assets/build/icon.ico', 'assets/build/icon-256.png'],
+    'every packaging target must point at an icon, not at Electron artwork');
+  for (const p of [pkg.build.mac.icon, pkg.build.win.icon, pkg.build.linux.icon]) {
+    ok(existsSync(join(root, p)), `package.json build points at ${p}, which is not on disk`);
+  }
+  ok(/icon: ICON/.test(shell) && /assets', 'build', 'icon-256\.png'/.test(shell), 'the window must be handed the repo icon');
+  ok(/app\.dock[\s\S]{0,40}setIcon/.test(shell), 'a bare `electron .` on macOS needs the dock icon set explicitly');
+
+  const master = pngHeader('assets/build/icon-256.png');
+  eq([master.w, master.h], [256, 256], 'the window icon is what taskbars actually scale from');
+
+  // ICNS: 'icns' + BE total, then per-entry fourcc + BE length + payload. The fourcc does not
+  // carry the size, so the only real check is the IHDR inside each payload.
+  const icns = buf('assets/build/icon.icns');
+  eq(icns.subarray(0, 4).toString('ascii'), 'icns', 'not an ICNS');
+  eq(icns.readUInt32BE(4), icns.length, 'ICNS header length disagrees with the file size');
+  const icnsSizes = [];
+  for (let i = 8; i < icns.length;) {
+    const n = icns.readUInt32BE(i + 4);
+    ok(n >= 8, `ICNS entry ${icns.subarray(i, i + 4).toString('ascii')} claims ${n} bytes`);
+    const pay = icns.subarray(i + 8, i + n);
+    if (pay.subarray(0, 8).toString('hex') === '89504e470d0a1a0a') icnsSizes.push(pay.readUInt32BE(16));
+    i += n;
+  }
+  eq(icnsSizes.sort((a, b) => a - b), [16, 32, 64, 128, 256, 512, 1024],
+    'the ICNS must carry the whole retina ladder, one PNG per size');
+
+  // ICO: 6-byte header, 16 bytes per entry, 256 encoded as 0.
+  const ico = buf('assets/build/icon.ico');
+  eq([ico.readUInt16LE(0), ico.readUInt16LE(2)], [0, 1], 'ICO must declare reserved=0, type=1 (icon)');
+  const count = ico.readUInt16LE(4);
+  ok(count >= 6, `ICO carries only ${count} sizes`);
+  const icoSizes = [];
+  for (let e = 0; e < count; e++) {
+    const at = 6 + 16 * e;
+    const w = ico.readUInt8(at) || 256;
+    const h = ico.readUInt8(at + 1) || 256;
+    const size = ico.readUInt32LE(at + 8);
+    const off = ico.readUInt32LE(at + 12);
+    ok(off + size <= ico.length, `ICO entry ${e} runs past the file`);
+    const pay = ico.subarray(off, off + size);
+    eq(pay.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', `ICO entry ${e} is not a PNG`);
+    eq([pay.readUInt32BE(16), pay.readUInt32BE(20)], [w, h], `ICO entry ${e} says ${w}x${h} in its directory`);
+    icoSizes.push(w);
+  }
+  eq(icoSizes.sort((a, b) => a - b), [16, 24, 32, 48, 64, 128, 256], 'the ICO ladder is the one Windows asks for');
+});
+
 test('every image the shell points at exists, and the generator can reproduce it', () => {
   const html = read('index.html');
   const refs = [...html.matchAll(/(?:href|src|content)="((?:icons|assets)\/[^"]+)"/g)].map((m) => m[1]);

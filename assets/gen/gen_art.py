@@ -12,8 +12,10 @@
 产出**逐字节相同**的文件 —— 资产因此是可审计的（`--verify` 重画一遍并与盘上比字节）。
 
 用法:
-  python3 assets/gen/gen_art.py            # 画全部资产进仓
+  python3 assets/gen/gen_art.py            # 画全部资产进仓（含 assets/build 的 .icns/.ico 桌面图标）
   python3 assets/gen/gen_art.py --verify   # 只校验盘上资产能否被重画复现（不落盘）
+  python3 assets/gen/gen_art.py --crosscheck  # 只取证：让 Apple 的 iconutil 画同一套尺寸，
+                                             # 比每个 type 负载里量到的像素（需要 macOS，产物不进仓）
 """
 import os
 import struct
@@ -539,15 +541,107 @@ ASSETS = [
     ('assets/art/cardback-128.png', lambda: build_cardback(128)),
     ('assets/art/glow-256.png', lambda: build_glow(256)),
     ('assets/art/og-cover-1200x630.png', lambda: build_og(1200, 630)),
+    ('assets/build/icon-256.png', lambda: build_icon(256)),
+    ('assets/build/icon.icns', lambda: encode_icns(desktop_icns())),
+    ('assets/build/icon.ico', lambda: encode_ico(desktop_ico())),
 ]
+
+
+# ------------------------------------------------------------------ 桌面容器（ICNS / ICO）
+# 两个容器都只是"目录头 + 原样 PNG 负载"，所以标准库写得出来，也不需要 iconutil：
+# Linux CI 上重跑 --verify 与 macOS 上产出的字节完全相同。
+#
+# ICNS 的 type 不写尺寸，猜错就把 1024 的图挂到 32 的格子上。下表是 `--crosscheck`
+# 从 iconutil 真产物的每条负载 IHDR 里量出来的：ic12=64 ic07=128 ic08=256 ic09=512
+# ic10=1024（ic11 其实是 32，不是 1024），16/32 用文档里的 PNG 型 icp4/icp5。
+ICNS_TYPES = [(16, 'icp4'), (32, 'icp5'), (64, 'ic12'), (128, 'ic07'),
+              (256, 'ic08'), (512, 'ic09'), (1024, 'ic10')]
+ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+
+
+def encode_icns(entries):
+    body = b''.join(t.encode('ascii') + struct.pack('>I', 8 + len(p)) + p for t, p in entries)
+    return b'icns' + struct.pack('>I', 8 + len(body)) + body
+
+
+def encode_ico(entries):
+    out = struct.pack('<HHH', 0, 1, len(entries))
+    payloads = b''
+    offset = 6 + 16 * len(entries)
+    for size, png in entries:
+        wh = 0 if size >= 256 else size          # 256 在目录里写成 0
+        out += struct.pack('<BBBBHHII', wh, wh, 0, 0, 1, 32, len(png), offset)
+        offset += len(png)
+        payloads += png
+    return out + payloads
+
+
+def desktop_icns():
+    return [(t, encode_png(build_icon(S, rounded=S >= 64))) for S, t in ICNS_TYPES]
+
+
+def desktop_ico():
+    return [(S, encode_png(build_icon(S, rounded=S >= 64))) for S in ICO_SIZES]
+
+
+def read_icns(data):
+    """-> {type: (w, h, payload_bytes)}，只收负载是 PNG 的条目（icns 的 type 本身不写尺寸）。"""
+    assert data[:4] == b'icns', 'not an icns'
+    total = struct.unpack('>I', data[4:8])[0]
+    assert total == len(data), 'icns header length %d != file %d' % (total, len(data))
+    out, i = {}, 8
+    while i < len(data):
+        t = data[i:i + 4].decode('ascii')
+        n = struct.unpack('>I', data[i + 4:i + 8])[0]
+        pay = data[i + 8:i + n]
+        if pay[:8] == b'\x89PNG\r\n\x1a\n':
+            out[t] = struct.unpack('>II', pay[16:24]) + (len(pay),)
+        i += n
+    return out
+
+
+def crosscheck():
+    """一次性取证：让 Apple 的 iconutil 画同一套尺寸，比的是每条 type 的实测像素。"""
+    import shutil
+    import subprocess
+    import tempfile
+    if not shutil.which('iconutil'):
+        print('crosscheck: 这台机器没有 iconutil（Linux CI 的正常状态），只跑 --verify')
+        return
+    iconset = {'icon_16x16.png': 16, 'icon_16x16@2x.png': 32, 'icon_32x32.png': 32,
+               'icon_32x32@2x.png': 64, 'icon_128x128.png': 128, 'icon_128x128@2x.png': 256,
+               'icon_256x256.png': 256, 'icon_256x256@2x.png': 512, 'icon_512x512.png': 512,
+               'icon_512x512@2x.png': 1024}
+    tmp = tempfile.mkdtemp()
+    set_dir = os.path.join(tmp, 'staircase.iconset')
+    os.makedirs(set_dir)
+    for name, S in iconset.items():
+        write_png(os.path.join(set_dir, name), build_icon(S, rounded=S >= 64))
+    target = os.path.join(tmp, 'staircase.icns')
+    subprocess.run(['iconutil', '-c', 'icns', '-o', target, set_dir], check=True)
+    theirs = read_icns(open(target, 'rb').read())
+    ours = read_icns(encode_icns(desktop_icns()))
+    print('crosscheck iconutil: %s' % {k: '%dx%d' % v[:2] for k, v in sorted(theirs.items())})
+    print('crosscheck 本脚本  : %s' % {k: '%dx%d' % v[:2] for k, v in sorted(ours.items())})
+    shared = sorted(set(theirs) & set(ours))
+    wrong = [t for t in shared if theirs[t][:2] != ours[t][:2]]
+    print('共有 type %d 个；同一 type 尺寸不一致 %d 个 %s；仅 iconutil 有 %s；仅本脚本有 %s'
+          % (len(shared), len(wrong), wrong, sorted(set(theirs) - set(ours)), sorted(set(ours) - set(theirs))))
+    sizes = sorted({ours[t][0] for t in ours})
+    print('本脚本每个 type 的像素尺寸 %s（必须与 ICNS_TYPES 一一对应）' % sizes)
+    sys.exit(1 if wrong or sizes != sorted(S for S, _ in ICNS_TYPES) else 0)
 
 
 def main():
     verify = '--verify' in sys.argv
+    if '--crosscheck' in sys.argv:
+        crosscheck()
+        return
     bad, total = 0, 0
     for rel, fn in ASSETS:
         path = os.path.join(ROOT, rel)
-        want = encode_png(fn())
+        made = fn()
+        want = made if isinstance(made, bytes) else encode_png(made)
         if verify:
             try:
                 have = open(path, 'rb').read()

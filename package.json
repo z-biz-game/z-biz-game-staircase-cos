@@ -32,8 +32,8 @@
   "build": {
     "appId": "com.zbiz.staircase",
     "productName": "Bulgarian Staircase",
-    "mac": { "category": "public.app-category.puzzle-games" },
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage" }
+    "mac": { "category": "public.app-category.puzzle-games", "icon": "assets/build/icon.icns" },
+    "win": { "target": "nsis", "icon": "assets/build/icon.ico" },
+    "linux": { "target": "AppImage", "icon": "assets/build/icon-256.png" }
   }
 }
