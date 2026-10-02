@@ -10,7 +10,9 @@ import {
   ALL, TIERS, TIERS_META, byId, levelAt, lotsIn, dailyLot, randomLot, reSolve, stats, tierByKey,
 } from './core/library.js';
 import { todayKey } from './core/rng.js';
-import { createView } from './view.js';
+import { createView, loadTextures } from './view.js';
+import { createAudio } from './audio.js';
+import { registerServiceWorker, checkManifest } from './pwa.js';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -19,6 +21,8 @@ const el = {
   verdict: $('verdict'), tally: $('tally'), deal: $('deal'), undo: $('undo'), hint: $('hint'),
   restart: $('restart'), share: $('share'), next: $('next'), again: $('again'),
   toast: $('toast'), canvas: $('board'), wipe: $('wipe'), backend: $('backend'),
+  pause: $('pause'), sound: $('sound'), full: $('fullscreen'),
+  help: $('help'), helpcard: $('helpcard'), closehelp: $('closehelp'),
 };
 
 // localStorage is guarded in js/core/storage.js and THROWS when it is not there (file://,
@@ -32,6 +36,18 @@ try {
   el.backend.textContent = `存档只在本次会话里（${err.message.split(':')[0]}）`;
 }
 const store = createStore(backend);
+// 解码是两段的：坏记录一条条丢，丢了多少必须说得出数字，否则"存档还在"只是一句口号。
+if (store.dropped > 0) {
+  el.backend.textContent = `${el.backend.textContent ? el.backend.textContent + ' · ' : ''}存档里丢了 ${store.dropped} 条读不通的记录`;
+}
+
+// 声音：静音态从存档里读回来，所以"上次关掉的声音"在下次打开还在。
+const audio = createAudio({ muted: !store.settings().sound });
+
+// prefers-reduced-motion 是一条真分支：呼吸光环、光晕、阴影抬升全部退化成静图。
+const REDUCE_QUERY = '(prefers-reduced-motion: reduce)';
+const reduceMotionQuery = typeof matchMedia === 'function' ? matchMedia(REDUCE_QUERY) : null;
+let REDUCED_MOTION = !!(reduceMotionQuery && reduceMotionQuery.matches);
 
 const LEVELS = ALL.length;
 const app = {
@@ -45,7 +61,23 @@ const app = {
   label: '',
   day: null,
   recheck: null,
+  paused: false,
+  helpOpen: false,
+  textures: [],
+  fullscreen: false,
+  sw: null,
+  manifest: null,
 };
+
+function applyReducedMotion(on) {
+  REDUCED_MOTION = !!on;
+  view.setReducedMotion(REDUCED_MOTION);
+  return REDUCED_MOTION;
+}
+// 系统中途改设置也要跟上。
+if (reduceMotionQuery && reduceMotionQuery.addEventListener) {
+  reduceMotionQuery.addEventListener('change', (ev) => applyReducedMotion(ev.matches));
+}
 
 function clampIndex(n) {
   return Math.min(LEVELS, Math.max(1, Number(n) || 1));
@@ -117,9 +149,10 @@ function renderCrumbs() {
     field('最佳', rec && rec.best ? rec.best : '—', rec && rec.perfect ? '等于最少' : '你的纪录', 'best'),
     field('牌数', `${lot.n} 张`, lot.attractor),
   ].join('');
-  el.undo.disabled = !app.game.moves || app.game.done;
-  el.hint.disabled = app.game.done;
-  el.deal.disabled = app.game.done;
+  el.undo.disabled = !app.game.moves || app.game.done || app.paused;
+  el.hint.disabled = app.game.done || app.paused;
+  el.deal.disabled = app.game.done || app.paused;
+  el.pause.setAttribute('aria-pressed', String(app.paused));
 }
 
 function renderTotals() {
@@ -185,13 +218,20 @@ function render() {
 // The one place an operation happens: a tap on the deck, a drag across a pile, a click pair
 // for a merge, and the test hook's replay all arrive here.
 function commit(action) {
+  if (app.paused) {
+    view.flash('已暂停');
+    say('已暂停 · 按 P 继续');
+    return false;
+  }
   const r = act(app.game, action);
   if (!r.ok) {
+    audio.play('deny');
     view.flash(r.reason);
     view.redraw();
     say(`不合法：${r.reason}`);
     return false;
   }
+  audio.play(action.kind);
   if (app.game.done) finish();
   else {
     view.redraw();
@@ -246,6 +286,7 @@ function finish() {
     + ` · 只发牌要 <b>${lot.steps}</b> · 提示 <b>${app.hints}</b>`
     + (rec.best === g.moves ? '<br>这是这一关的最好成绩' : '');
   el.next.hidden = !nextIndex;
+  audio.play('win');
   el.curtain.hidden = false;
   view.redraw();
   render();
@@ -333,6 +374,70 @@ el.again.addEventListener('click', restart);
 el.share.addEventListener('click', shareLink);
 el.next.addEventListener('click', () => go(`#/c/${Math.min(LEVELS, app.index + 1)}`));
 
+// 暂停：冻住 view 的 dt 累加器与 AudioContext，恢复后不跳步、不丢局面。
+function setPaused(on) {
+  const want = on === undefined ? !app.paused : !!on;
+  if (want === app.paused) return app.paused;
+  app.paused = want;
+  view.setPaused(want);
+  audio.hold(want);
+  el.pause.textContent = want ? '继续' : '暂停';
+  el.pause.setAttribute('aria-pressed', String(want));
+  renderCrumbs();
+  say(want ? '已暂停 · 棋盘不再接受操作' : '继续 · 时钟从暂停处接上');
+  return app.paused;
+}
+el.pause.addEventListener('click', () => { audio.play('ui'); setPaused(); });
+
+function syncSound() {
+  const muted = audio.muted;
+  el.sound.textContent = muted ? '声音 关' : '声音 开';
+  el.sound.setAttribute('aria-pressed', String(!muted));
+  el.sound.title = muted ? '静音（M）' : '发声中（M 关闭）';
+}
+
+function toggleSound() {
+  const r = audio.toggleMute();
+  store.setSetting('sound', !r.muted);
+  syncSound();
+  if (!r.muted) audio.play('ui');
+  say(r.muted ? '已静音 · AudioContext 挂起，之后一步都不会再建发声节点' : '声音已开');
+  return r.muted;
+}
+el.sound.addEventListener('click', toggleSound);
+
+function toggleFullscreen() {
+  const doc = document;
+  const node = doc.documentElement;
+  if (!doc.fullscreenElement) {
+    const req = node.requestFullscreen || node.webkitRequestFullscreen;
+    if (!req) { toast('这台设备不支持全屏'); return false; }
+    const p = req.call(node);
+    if (p && p.catch) p.catch(() => toast('全屏被拒绝'));
+  } else if (doc.exitFullscreen || doc.webkitExitFullscreen) {
+    (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
+  }
+  return app.fullscreen;
+}
+el.full.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  app.fullscreen = !!document.fullscreenElement;
+  el.full.setAttribute('aria-pressed', String(app.fullscreen));
+  view.measure();
+});
+
+function showHelp(on) {
+  const want = on === undefined ? !app.helpOpen : !!on;
+  app.helpOpen = want;
+  el.helpcard.hidden = !want;
+  el.help.setAttribute('aria-pressed', String(want));
+  if (want) audio.play('ui');
+  return want;
+}
+el.help.addEventListener('click', () => showHelp());
+el.closehelp.addEventListener('click', () => showHelp(false));
+el.helpcard.addEventListener('click', (ev) => { if (ev.target === el.helpcard) showHelp(false); });
+
 let wipeArmed = false;
 el.wipe.addEventListener('click', () => {
   if (!wipeArmed) {
@@ -352,17 +457,41 @@ window.addEventListener('resize', () => view.measure());
 window.addEventListener('keydown', (ev) => {
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
   const k = ev.key.toLowerCase();
-  if (k === 'escape' && !el.curtain.hidden) el.curtain.hidden = true;
-  else if (k === 'u') el.undo.click();
-  else if (k === 'h') el.hint.click();
-  else if (k === 'r') el.restart.click();
-  else if (k === 'd' || k === ' ') { ev.preventDefault(); el.deal.click(); }
+  if (app.helpOpen) {
+    // 教学面板打开时键盘只服务于它自己，否则会顺手发一次牌。
+    if (k === 'escape' || k === 'enter' || k === '?' || k === '/') { ev.preventDefault(); showHelp(false); }
+    return;
+  }
+  if (k === 'escape') { el.curtain.hidden = true; return; }
+  if (k === '?' || k === '/') { ev.preventDefault(); showHelp(true); return; }
+  if (k === 'p') { ev.preventDefault(); setPaused(); return; }
+  if (k === 'm') { ev.preventDefault(); toggleSound(); return; }
+  if (k === 'f') { ev.preventDefault(); toggleFullscreen(); return; }
+  if (k === 'u') { el.undo.click(); return; }
+  if (k === 'h') { el.hint.click(); return; }
+  if (k === 'r') { el.restart.click(); return; }
+  if (k === 'd' || k === 'enter' || k === ' ') { ev.preventDefault(); el.deal.click(); return; }
+  // 1…9 选堆：和手指的"点两堆即并"走同一个 pick()，所以键盘不可能并出规则外的堆。
+  if (k >= '1' && k <= '9') {
+    const i = Number(k) - 1;
+    if (i < app.game.piles.length) { ev.preventDefault(); pick(i); }
+  }
 });
 
 view.start();
+syncSound();
+applyReducedMotion(REDUCED_MOTION);
+// 纹理是增强：任何一张没读到都只是少一层，画面退回纯程序化绘制，不抛异常。
+loadTextures().then((map) => {
+  app.textures = view.setTextures(map);
+});
+registerServiceWorker().then((r) => { app.sw = r; });
+checkManifest().then((m) => { app.manifest = m; });
 // Deliberately not paused on visibilitychange: a tab that reports itself hidden (headless
 // Chrome does) must still be able to finish a lot.
 apply();
+// 第一次玩（这台设备一个记录都没有）就把说明摊开，说明里写的键就是下面那套键盘处理。
+if (store.stats.solves === 0 && Object.keys(store.records).length === 0) showHelp(true);
 
 window.stair = window.staircase = {
   version: 1,
@@ -387,6 +516,10 @@ window.stair = window.staircase = {
       solved: Object.values(store.records).filter((r) => r.solved).length,
       curtain: !el.curtain.hidden,
       storage: backend.name,
+      paused: app.paused,
+      helpOpen: app.helpOpen,
+      reduceMotion: REDUCED_MOTION,
+      muted: audio.muted,
       recheck: app.recheck,
       board: app.game ? app.game.piles.slice() : null,
       target: app.game ? app.game.target.slice() : null,
@@ -423,5 +556,24 @@ window.stair = window.staircase = {
   census(n) { return convergenceCensus(n, { limit: 400 }); },
   orbitCensus(n) { return orbitCensus(n, { limit: 400 }); },
   hintOnce() { el.hint.click(); return { hints: app.hints, line: el.hintline.textContent, action: app.lastHint }; },
+  // 对拍与自检要读的三组实测数：动画时钟（全部由 dt 积分）、发声节点计数（静音必须不再增）、
+  // 以及 PWA/纹理/存档的落地情况。它们都是读数，不是断言。
+  clock() { return view.clock(); },
+  sound() { return audio.state(); },
+  shell() {
+    return {
+      sw: app.sw,
+      manifest: app.manifest,
+      textures: app.textures.slice(),
+      fullscreen: app.fullscreen,
+      backend: backend.name,
+      dropped: store.dropped,
+      settings: store.settings(),
+    };
+  },
+  setPaused,
+  setMuted(on) { audio.setMuted(on); syncSound(); return audio.muted; },
+  setReducedMotion: applyReducedMotion,
+  openHelp: showHelp,
   store,
 };

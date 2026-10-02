@@ -13,8 +13,11 @@ const TYPES = {
   '.cjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  // A manifest served as octet-stream is a manifest Chrome refuses to install from.
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.png': 'image/png',
 };
 
 function createServer(root = __dirname) {

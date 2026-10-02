@@ -1,9 +1,10 @@
-// The repo itself as a gate: zero dependencies, no binary assets, the three layers not
-// bleeding into each other, the CI file set matching `npm run check`, and the two places the
-// display name is written agreeing. Every row here is a claim someone could otherwise make in
-// a README without anything checking it.
+// The repo itself as a gate: zero dependencies, the shipped images being real images the
+// generator can reproduce, the three layers not bleeding into each other, the CI file set
+// matching `npm run check`, and the two places the display name is written agreeing.
+// Every row here is a claim someone could otherwise make in a README without anything
+// checking it.
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { dirname, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +12,7 @@ import { test, run, eq, ok } from '../tools/harness.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
+const buf = (p) => readFileSync(join(root, p));
 
 function walk(dir, out = []) {
   for (const name of readdirSync(join(root, dir))) {
@@ -22,9 +24,18 @@ function walk(dir, out = []) {
   return out;
 }
 
-const FILES = [...walk('js'), ...walk('css'), ...walk('tools'), ...walk('test'), ...walk('electron'),
-  'index.html', 'server.cjs', 'package.json', 'README.md', 'DESIGN.md', 'deliverable.md', 'LICENSE', '.gitignore']
-  .filter((f) => !f.endsWith('.DS_Store'));
+const CODE = [...walk('js'), ...walk('css'), ...walk('tools'), ...walk('test'), ...walk('electron'),
+  'index.html', 'server.cjs', 'sw.js', 'manifest.webmanifest', 'package.json', 'README.md',
+  'DESIGN.md', 'deliverable.md', 'LICENSE', '.gitignore'].filter((f) => !f.endsWith('.DS_Store'));
+const IMAGES = [...walk('icons'), ...walk('assets/art')].filter((f) => f.endsWith('.png'));
+const FILES = [...CODE, ...IMAGES];
+
+// IHDR is at a fixed offset, so this is the whole of what "the file is that size" means.
+function pngHeader(p) {
+  const b = buf(p);
+  eq(b.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', `${p} is not a PNG`);
+  return { w: b.readUInt32BE(16), h: b.readUInt32BE(20), depth: b.readUInt8(24), color: b.readUInt8(25) };
+}
 
 test('package.json really has zero dependencies and zero devDependencies', () => {
   const pkg = JSON.parse(read('package.json'));
@@ -36,30 +47,95 @@ test('package.json really has zero dependencies and zero devDependencies', () =>
   ok(pkg.scripts.verify.includes('tools/verify.sh'));
 });
 
-test('the repo has no binary assets of any kind', () => {
-  const BANNED = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp3', '.wav', '.ogg', '.woff', '.woff2', '.ttf', '.eot', '.pdf', '.zip'];
+test('every shipped file has bytes in it, and nothing pretends to be an asset', () => {
+  for (const f of FILES) ok(statSync(join(root, f)).size > 0, `${f} is 0 bytes`);
+  const BANNED = ['.jpg', '.jpeg', '.gif', '.webp', '.mp3', '.wav', '.ogg', '.woff', '.woff2', '.ttf', '.eot', '.pdf', '.zip'];
   const hits = FILES.filter((f) => BANNED.includes(extname(f).toLowerCase()));
-  eq(hits, [], 'these assets should not exist');
-  // And nothing is pretending to be an asset by being untextably large.
-  const big = FILES.filter((f) => statSync(join(root, f)).size > 400000);
-  eq(big, [], 'a shipped file over 400kB needs a reason and a generator');
+  eq(hits, [], 'these asset types have no business in a zero-dependency repo');
+  // PNGs are allowed only where the generator writes them; a blob anywhere else is unexplained.
+  const stray = IMAGES.filter((f) => !f.startsWith('icons/') && !f.startsWith('assets/art/'));
+  eq(stray, [], 'images must live in icons/ or assets/art/');
+  // Text stays text: a 400kB source file means something got baked that should be generated.
+  const big = CODE.filter((f) => statSync(join(root, f)).size > 400000);
+  eq(big, [], 'a shipped source file over 400kB needs a reason and a generator');
 });
 
-test('the favicon is an inline SVG data URI, not the empty data:, trick', () => {
+test('the icons are real PNGs of the size their filename claims', () => {
+  ok(IMAGES.length >= 10, `only ${IMAGES.length} icons shipped`);
+  for (const f of IMAGES.filter((x) => x.startsWith('icons/'))) {
+    const m = f.match(/(16|32|48|64|96|180|192|512|1024)/);
+    const { w, h } = pngHeader(f);
+    if (m) eq([w, h], [Number(m[1]), Number(m[1])], `${f} is ${w}x${h} but named for ${m[1]}`);
+    ok(w === h, `${f} is not square`);
+  }
+  // The two numbers a store listing is judged on: an icon that can be installed, and a
+  // favicon big enough to be one.
+  const touch = pngHeader('icons/apple-touch-icon.png');
+  ok(Math.min(touch.w, touch.h) >= 180, `apple-touch-icon is ${touch.w}x${touch.h}`);
+  ok(pngHeader('icons/icon-1024.png').w === 1024, 'no 1024 master means every store resizes itself');
+  const og = pngHeader('assets/art/og-cover-1200x630.png');
+  eq([og.w, og.h], [1200, 630], 'a share card at any other ratio gets cropped by every linker');
+  for (const f of ['assets/art/felt-256.png', 'assets/art/cardback-128.png', 'assets/art/glow-256.png']) {
+    ok(pngHeader(f).w >= 128, `${f} is too small to tile as a texture`);
+  }
+});
+
+test('every image the shell points at exists, and the generator can reproduce it', () => {
   const html = read('index.html');
-  const m = html.match(/<link rel="icon" href="([^"]+)"/);
-  ok(m, 'index.html must carry a favicon link');
-  ok(m[1].startsWith('data:image/svg+xml,'), `favicon is ${m[1].slice(0, 32)}`);
+  const refs = [...html.matchAll(/(?:href|src|content)="((?:icons|assets)\/[^"]+)"/g)].map((m) => m[1]);
+  ok(refs.length >= 5, `only ${refs.length} image references in the shell`);
+  // js/view.js loads its texture layer by path; a typo there is invisible until the table is flat.
+  const textures = [...read('js/view.js').matchAll(/'(assets\/art\/[^']+)'/g)].map((m) => m[1]);
+  eq(textures.length, 3, 'the TEXTURES table should name felt, card and glow');
+  for (const r of [...refs, ...textures]) ok(existsSync(join(root, r)), `the page references ${r}, which is not on disk`);
+  const gen = read('assets/gen/gen_art.py');
+  for (const f of IMAGES) ok(gen.includes(`'${f}'`), `${f} is shipped but not in the generator's ASSETS table`);
+  ok(/def write_png|zlib\.compress/.test(gen), 'the generator must hand-write PNGs with stdlib only');
+  ok(!/import PIL|import numpy|require\(/.test(gen), 'the generator must not need a dependency this repo does not have');
+});
+
+test('the manifest and the worker describe the same installable app that is on disk', () => {
+  const html = read('index.html');
+  ok(/<link rel="manifest" href="manifest\.webmanifest">/.test(html), 'no manifest link');
+  ok(/rel="apple-touch-icon"/.test(html), 'no apple-touch-icon link');
+  ok(/property="og:image"/.test(html), 'no share card');
+  const mf = JSON.parse(read('manifest.webmanifest'));
+  ok(mf.start_url && mf.display && mf.name && mf.short_name, 'a manifest without start_url/display is not installable');
+  ok(mf.icons.length >= 4, 'need 192/512 plus maskable variants');
+  for (const icon of mf.icons) {
+    ok(existsSync(join(root, icon.src)), `manifest promises ${icon.src}`);
+    const { w, h } = pngHeader(icon.src);
+    eq(icon.sizes, `${w}x${h}`, `${icon.src} is labelled ${icon.sizes}`);
+    ok(/\d{3,}x\d{3,}/.test(icon.sizes), `${icon.src} is too small to install with`);
+  }
+  ok(/serviceWorker/.test(read('js/pwa.js')) && /navigator\.serviceWorker\.register\(/.test(read('js/pwa.js')),
+    'nothing registers the worker');
+  const sw = read('sw.js');
+  ok(/caches\.open\(/.test(sw) && /VERSION/.test(sw), 'the worker must own a versioned cache');
+  ok(/url\.origin !== self\.location\.origin/.test(sw), 'the worker must not intercept third-party requests');
+});
+
+test('the favicon is a real PNG file, not the empty data:, trick', () => {
+  const html = read('index.html');
   ok(!/href="data:,"/.test(html), 'href="data:," is what the contract forbids');
-  ok(!/<img|\.png|\.jpg/i.test(html), 'no image references in the shell');
+  const links = [...html.matchAll(/<link rel="icon" href="([^"]+)" sizes="(\d+)x\2"[^>]*type="image\/png"/g)];
+  ok(links.length >= 3, `only ${links.length} sized PNG favicon links`);
+  for (const [, href, size] of links) {
+    const { w } = pngHeader(href);
+    eq(w, Number(size), `${href} is ${w}px but declared ${size}px`);
+  }
 });
 
 test('js/core is pure: no window, no document, except the one guarded storage accessor', () => {
   for (const f of FILES.filter((x) => x.startsWith('js/core/'))) {
     const src = read(f);
     if (f.endsWith('storage.js')) {
-      ok(/typeof window === 'undefined'/.test(src) && /throw new Error/.test(src),
-        'storage.js must guard window.localStorage AND throw, not return null');
+      ok(/typeof localStorage === 'undefined'/.test(src) && /throw new Error/.test(src),
+        'storage.js must guard localStorage AND throw, not return null');
+      ok(/localStorage\.setItem/.test(src) && /localStorage\.getItem/.test(src),
+        'a save that is written but never read back is not a save');
+      ok(/JSON\.parse/.test(src) && /catch/.test(src) && /for \(/.test(src),
+        'storage.js must decode in two stages: parse the envelope, then audit each record');
       ok(!/document\./.test(src), 'storage.js may read localStorage but never the DOM');
       continue;
     }
@@ -90,13 +166,19 @@ test('the CI syntax step covers exactly the file set `npm run check` covers', ()
   ok(ci.includes('node "$f"'), 'CI runs each test file, so a failing row fails the job');
 });
 
-test('pages.yml copies only what the page can reach', () => {
+test('pages.yml copies exactly what the page can reach, and nothing else', () => {
   const pages = read('.github/workflows/pages.yml');
-  ok(/cp index.html _site\//.test(pages));
-  ok(/cp -r css js _site\//.test(pages));
+  const build = pages.split('Assemble static site')[1].split('uses: actions/configure-pages')[0];
+  ok(/cp index.html manifest\.webmanifest sw\.js _site\//.test(build), 'the install trio must be published');
+  ok(/cp -r css js icons _site\//.test(build), 'css, js and icons must be published');
+  ok(/cp -r assets\/art _site\/assets\//.test(build), 'the texture layer must be published');
   ok(!/path: \.\s*$/m.test(pages), 'never publish the whole repo as the site');
-  ok(!/tools|test\/|server\.cjs|electron/.test(pages.split('Assemble static site')[1].split('uses: actions/configure-pages')[0]),
-    'the build step must not carry tools/, tests or the server into the artifact');
+  ok(!/tools|test\/|server\.cjs|electron|assets\/gen/.test(build),
+    'the build step must not carry tools/, tests, the server or the generator into the artifact');
+  // Every path the copy names has to exist, or CI fails at `cp` instead of here.
+  for (const p of ['index.html', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'icons', 'assets/art']) {
+    ok(existsSync(join(root, p)), `pages.yml copies ${p}, which is not in the repo`);
+  }
 });
 
 test('this repo owns its own ports and says so', () => {

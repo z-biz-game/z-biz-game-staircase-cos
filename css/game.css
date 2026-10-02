@@ -1,5 +1,7 @@
-/* One dark table, one warm accent. No font files, no images: the only drawing this game
-   does is procedural, in js/view.js. */
+/* One dark table, one warm accent. No font files and no color images to download for the
+   layout: the board is drawn procedurally in js/view.js, and assets/art/*.png are an
+   optional texture layer (a missing file leaves the same picture one flatter, never broken).
+   Every tappable control is sized for a thumb, and the notch is respected. */
 
 :root {
   --bg: #14161a;
@@ -30,7 +32,8 @@ html, body {
   flex-wrap: wrap;
   gap: 12px 18px;
   align-items: baseline;
-  padding: 12px 18px 6px;
+  /* viewport-fit=cover 把画面推到刘海与圆角下面，这三条 env() 就是把内容推回来的那层。 */
+  padding: calc(12px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) 6px calc(18px + env(safe-area-inset-left));
   border-bottom: 1px solid var(--line);
 }
 
@@ -47,7 +50,7 @@ html, body {
 .brand small { color: var(--muted); font-size: 11px; letter-spacing: 0.18em; }
 
 .modes { display: flex; gap: 6px; }
-.modes button, .controls button, .shelf button, .curtain-actions button, .about button {
+.modes button, .controls button, .shelf button, .curtain-actions button, .about button, .help-body button {
   font: inherit;
   color: var(--ink);
   background: var(--panel);
@@ -55,10 +58,18 @@ html, body {
   border-radius: 9px;
   padding: 6px 11px;
   cursor: pointer;
+  /* 拇指命中区：44×44 是下限而不是装饰，小按钮（关卡号格子）靠它撑开。 */
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
 }
 .modes button:hover, .controls button:hover:not(:disabled), .shelf button:hover:not(:disabled) {
   border-color: rgba(224, 166, 60, 0.55);
 }
+.modes button:active:not(:disabled), .controls button:active:not(:disabled) { background: #232a34; }
+.modes button:focus-visible, .controls button:focus-visible, .shelf button:focus-visible,
+.help-body button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .modes button[aria-current="true"] { background: #232a34; border-color: var(--gold); color: #f6e3bd; }
 .controls button.primary { background: var(--gold); border-color: var(--gold-dark); color: #201708; font-weight: 600; }
 button:disabled { opacity: 0.42; cursor: not-allowed; }
@@ -70,7 +81,7 @@ button:disabled { opacity: 0.42; cursor: not-allowed; }
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(260px, 340px);
   gap: 16px;
-  padding: 14px 18px 22px;
+  padding: 14px calc(18px + env(safe-area-inset-right)) calc(22px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
   align-items: start;
   max-width: 1180px;
   margin: 0 auto;
@@ -148,7 +159,6 @@ canvas#board {
 
 .shelf { display: flex; flex-direction: column; gap: 6px; }
 .shelf p.tier { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
-.shelf button { min-width: 34px; }
 .shelf:not(:empty) { flex-direction: column; }
 .shelf p + p { margin-top: 4px; }
 .shelf button.here { outline: 2px solid var(--gold); }
@@ -167,7 +177,7 @@ canvas#board {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 22px;
+  bottom: calc(22px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   background: #262c35;
   border: 1px solid var(--line);
@@ -178,6 +188,72 @@ canvas#board {
   max-width: 84vw;
 }
 .toast[hidden] { display: none; }
+
+/* 辅助开关（暂停 / 声音 / 全屏 / 说明）：aria-pressed 就是真状态，样式只是把它画出来。 */
+.controls.aux { border-top: 1px dashed var(--line); padding-top: 8px; }
+.controls.aux button { font-size: 13px; }
+.controls.aux button[aria-pressed="true"] {
+  background: #232a34;
+  border-color: var(--gold);
+  color: #f6e3bd;
+}
+
+/* 玩法说明：盖住棋盘的那一层，[hidden] 必须显式压回 display:none（和 .curtain 同一个坑）。 */
+.helpcard {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 10, 14, 0.82);
+  border-radius: var(--radius);
+  padding: 12px;
+  animation: help-in 160ms ease-out;
+}
+.helpcard[hidden] { display: none; }
+@keyframes help-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.help-body {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 18px 16px;
+  max-width: 620px;
+  max-height: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.help-body h2 { margin: 0 0 8px; font-size: 17px; color: var(--gold); }
+.help-body ol { margin: 0 0 10px; padding-left: 20px; line-height: 1.75; font-size: 13px; }
+.help-body p { margin: 0 0 10px; font-size: 13px; line-height: 1.7; }
+.help-body .muted { color: var(--muted); }
+.help-body code { background: #20252d; padding: 1px 5px; border-radius: 4px; color: #d7e2f0; }
+.help-body .keys { color: var(--muted); font-size: 12px; line-height: 2; }
+kbd {
+  font: inherit;
+  font-size: 11px;
+  background: #262c35;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: #dfe6f1;
+}
+
+/* 系统说"少动效"时这里是真的规则，不是空块：呼吸/入场/颜色过渡全部退化成一次到位，
+   js/view.js 里同一条查询另有一支（光环相位钉死在 0.3）。 */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+  .helpcard { animation: none; }
+  .modes button, .controls button, .shelf button, .curtain-actions button, .about button,
+  .help-body button { transition: none; }
+  .modes button:active:not(:disabled), .controls button:active:not(:disabled) { background: var(--panel); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .controls button:hover:not(:disabled) { transform: translateY(-1px); }
+}
 
 @media (max-width: 780px) {
   .stage { grid-template-columns: 1fr; }

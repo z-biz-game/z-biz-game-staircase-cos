@@ -1,0 +1,27 @@
+{
+  "name": "保加利亚梯 · BULGARIAN",
+  "short_name": "保加利亚梯",
+  "description": "每次从每堆拿走一张，把拿走的聚成新一堆。牌数是三角数时任何开局都必然收敛到阶梯；每关的最少操作数由广度优先搜索量出来。",
+  "id": "staircase-cos",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#14161a",
+  "theme_color": "#14161a",
+  "categories": ["games", "puzzle"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "每日梯", "short_name": "每日", "url": "./#/daily", "description": "所有人今天同一副牌" },
+    { "name": "继续战役", "short_name": "战役", "url": "./#/c/1", "description": "从第 1 关开始的 30 关" }
+  ]
+}

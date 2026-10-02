@@ -5,8 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#14161a">
 <meta name="description" content="保加利亚梯：每次从每堆拿走一张，把拿走的聚成新一堆。牌数是三角数时任何开局都必然收敛到阶梯，每关的最少操作数由广度优先搜索量出来。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2314161a'/%3E%3Crect x='4' y='22' width='5' height='6' rx='1.5' fill='%23e0a63c'/%3E%3Crect x='11' y='16' width='5' height='12' rx='1.5' fill='%239ab6c9'/%3E%3Crect x='18' y='10' width='5' height='18' rx='1.5' fill='%239ab6c9'/%3E%3Crect x='25' y='4' width='3' height='24' rx='1.5' fill='%239ab6c9'/%3E%3C/svg%3E">
 <title>保加利亚梯 · BULGARIAN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="icons/favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="保加利亚梯 · BULGARIAN">
+<meta property="og:description" content="每关的“最少”是 BFS 在 p(n) 个局面上量出来的最短操作数：发牌、并堆、拆堆各算一步。">
+<meta property="og:image" content="assets/art/og-cover-1200x630.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
@@ -35,6 +46,22 @@
         </div>
       </div>
     </div>
+    <div class="helpcard" id="helpcard" role="dialog" aria-modal="true" aria-label="玩法说明" hidden>
+      <div class="help-body">
+        <h2>玩法说明</h2>
+        <ol>
+          <li><b>发牌</b>（定理里的那一步）：从每一堆各拿走一张，聚成一个新的堆。点左上角的<i>发牌</i>块，或按 <kbd>D</kbd> / <kbd>Enter</kbd>。</li>
+          <li><b>并堆</b>：点一堆选中，再点另一堆，两堆合成一堆。<kbd>1</kbd>…<kbd>9</kbd> 也能选堆。</li>
+          <li><b>拆堆</b>：在某张牌上按住往下拖，那一堆就从那一张起断成两段。</li>
+        </ol>
+        <p>三种操作<b>都算一步</b>。目标是把桌面还原成这一关印着的阶梯 <code>(k, k-1, …, 1)</code>。</p>
+        <p class="muted">屏幕上那个<b>最少</b>不是猜的：<code>js/core/solve.js</code> 在这副牌的全部分拆上做广度优先搜索，量出最短操作数；关卡在构建期复验，数对不上就不出货。</p>
+        <p class="keys">
+          <kbd>P</kbd> 暂停 · <kbd>M</kbd> 静音 · <kbd>F</kbd> 全屏 · <kbd>U</kbd> 撤销 · <kbd>R</kbd> 重开 · <kbd>H</kbd> 提示 · <kbd>?</kbd> 本说明
+        </p>
+        <button type="button" id="closehelp" class="primary">开始玩</button>
+      </div>
+    </div>
   </section>
 
   <aside class="panel">
@@ -46,6 +73,12 @@
       <button type="button" id="hint">提示</button>
       <button type="button" id="restart">重开</button>
       <button type="button" id="share">分享</button>
+    </div>
+    <div class="controls aux">
+      <button type="button" id="pause" aria-pressed="false">暂停</button>
+      <button type="button" id="sound" aria-pressed="true">声音 开</button>
+      <button type="button" id="fullscreen" aria-pressed="false">全屏</button>
+      <button type="button" id="help" aria-pressed="false">玩法说明</button>
     </div>
     <p class="legend">点一堆选中，再点另一堆就是把两堆<b>并</b>起来；从某张牌往下拖就是把那一堆<b>拆</b>成两段；点左上角的<i>发牌</i>块就是定理里的那一步。三种都算一步。</p>
     <div class="shelf" id="shelf"></div>

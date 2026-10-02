@@ -4,8 +4,32 @@
 // say yes or no. A pile can therefore be highlighted wrong for a frame; it can never be
 // moved illegally.
 //
-// Zero image assets: every card is a rounded rectangle drawn here, sized by the element box
-// and multiplied by devicePixelRatio so the text stays crisp on a phone.
+// Textures are an enhancement, never a dependency: assets/art/*.png are loaded through
+// loadTextures() and every draw call checks for the pattern first, so a missing file (or
+// file://, or a device with no network) still gets the full procedural table. Animation is
+// integrated from the frame delta — nothing here reads a wall clock, so a 30Hz and a 144Hz
+// device show the same phase at the same virtual second.
+
+export const TEXTURES = {
+  felt: 'assets/art/felt-256.png',
+  card: 'assets/art/cardback-128.png',
+  glow: 'assets/art/glow-256.png',
+};
+
+// 一张都不落地也不抛：返回的 map 里只有成功的那些键。
+export function loadTextures(src = TEXTURES) {
+  const loaded = {};
+  if (typeof Image !== 'function') return Promise.resolve(loaded);
+  return Promise.all(Object.keys(src).map((key) => new Promise((done) => {
+    const img = new Image();
+    img.onload = () => {
+      if (img.naturalWidth || img.width) loaded[key] = img;
+      done();
+    };
+    img.onerror = () => done();
+    img.src = src[key];
+  }))).then(() => loaded);
+}
 
 const PAD = 16;
 const DECK = 0.78; // deck block width, in card widths
@@ -35,10 +59,31 @@ export function createView(canvas, { onAction, onPick } = {}) {
   let target = [];
   let geom = null;
   let drag = null; // { i, j, from, along, split }
-  let flash = null; // { kind, until } — a refusal or a landed deal
-  let hintAt = null; // { i, j, until }
+  let flash = null; // { kind, left } — a refusal or a landed deal, counted down in seconds
+  let hintAt = null; // { i, j, left }
   let raf = 0;
   let last = 0;
+  let animClock = 0;   // 虚拟秒：只有它前进，画面才动；暂停时冻住
+  let hintLeft = 0;
+  let flashLeft = 0;
+  let paused = false;
+  let dirty = false;
+
+  const media = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  let reduceMotion = !!(media && media.matches);
+  const tex = { felt: null, card: null, glow: null };
+  const pat = { felt: null, card: null };
+
+  function setTextures(next) {
+    for (const k of Object.keys(tex)) {
+      if (next && next[k]) {
+        tex[k] = next[k];
+        if (k !== 'glow' && ctx.createPattern) pat[k] = ctx.createPattern(next[k], 'repeat');
+      }
+    }
+    draw();
+    return Object.keys(tex).filter((k) => !!tex[k]);
+  }
 
   // ---- geometry --------------------------------------------------------------------
   function measure() {
@@ -118,7 +163,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
 
   // ---- input -----------------------------------------------------------------------
   function down(ev) {
-    if (!game || game.done) return;
+    if (!game || game.done || paused) return;
     const p = localPoint(ev);
     const h = hit(p);
     if (!h) return;
@@ -136,7 +181,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
   }
 
   function move(ev) {
-    if (!drag || drag.deck) return;
+    if (!drag || drag.deck || paused) return;
     const p = localPoint(ev);
     drag.along = p.y - drag.from.y;
     // Cosmetic only: the cut is the card the finger grabbed, and grabbing the top card
@@ -150,6 +195,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
     const d = drag;
     drag = null;
     if (ev) ev.preventDefault();
+    if (paused) { draw(); return; }   // 中途被暂停：这次拖动作废，不提交任何动作
     if (d.deck) {
       if (onAction) onAction({ kind: 'deal' });
       return;
@@ -165,12 +211,22 @@ export function createView(canvas, { onAction, onPick } = {}) {
   function drawCard(x, y, w, h, i, lifted) {
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = lifted ? 14 : 5;
+    ctx.shadowBlur = lifted ? (reduceMotion ? 8 : 14) : 5;
     ctx.shadowOffsetY = lifted ? 6 : 2;
     ctx.fillStyle = CARD[i % CARD.length];
     roundRect(ctx, x, y, w, h, Math.round(w * 0.14));
     ctx.fill();
     ctx.restore();
+    // 牌背纹理：裁进圆角里叠一层，读不到图就整段跳过（画面退回纯程序化）。
+    if (pat.card) {
+      ctx.save();
+      roundRect(ctx, x, y, w, h, Math.round(w * 0.14));
+      ctx.clip();
+      ctx.globalAlpha = 0.34;
+      ctx.fillStyle = pat.card;
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    }
     ctx.fillStyle = 'rgba(240, 244, 250, 0.10)';
     roundRect(ctx, x + 3, y + 3, w - 6, h - 6, Math.round(w * 0.11));
     ctx.fill();
@@ -212,6 +268,12 @@ export function createView(canvas, { onAction, onPick } = {}) {
   function drawDeck() {
     const { deckX, deckY, deckW, cardH } = geom;
     const grabbed = drag && drag.deck;
+    if (tex.glow) {
+      ctx.save();
+      ctx.globalAlpha = grabbed && !reduceMotion ? 0.6 : 0.32;
+      ctx.drawImage(tex.glow, deckX - deckW * 0.55, deckY - cardH * 0.34, deckW * 2.1, cardH * 1.7);
+      ctx.restore();
+    }
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.shadowBlur = grabbed ? 16 : 6;
@@ -238,7 +300,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
     const { cardW, cardH, step } = geom;
     const x = pileX(i);
     const selected = game.selected === i;
-    const hinted = hintAt && hintAt.i === i && performance.now() < hintAt.until;
+    const hinted = !!hintAt && hintAt.i === i && hintLeft > 0;
     const dragging = drag && drag.i === i && drag.split >= 1;
     const cut = dragging ? drag.split : -1;
     for (let j = 0; j < size; j++) {
@@ -259,7 +321,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
       ctx.stroke();
     }
     if (hinted) {
-      const t = (performance.now() % 900) / 900;
+      const t = reduceMotion ? 0.3 : (animClock % 0.9) / 0.9;
       ctx.strokeStyle = `rgba(120, 220, 255, ${(0.85 - t * 0.5).toFixed(3)})`;
       ctx.lineWidth = 2 + t * 4;
       roundRect(ctx, x - 4 - t * 5, geom.oy - 4 - t * 5, cardW + 8 + t * 10, (size - 1) * step + cardH + 8 + t * 10, Math.round(cardW * 0.18));
@@ -289,10 +351,25 @@ export function createView(canvas, { onAction, onPick } = {}) {
     ctx.fillStyle = FELT;
     roundRect(ctx, 6, STRIP - 6, W - 12, H - STRIP, 12);
     ctx.fill();
+    if (pat.felt) {
+      ctx.save();
+      roundRect(ctx, 6, STRIP - 6, W - 12, H - STRIP, 12);
+      ctx.clip();
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = pat.felt;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
     drawTargetStrip();
     drawDeck();
     for (let i = 0; i < game.piles.length; i++) drawPile(i, game.piles[i]);
     if (game.done) {
+      if (tex.glow) {
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(tex.glow, 6, STRIP - 6, W - 12, H - STRIP + 6);
+        ctx.restore();
+      }
       ctx.fillStyle = 'rgba(224, 166, 60, 0.16)';
       roundRect(ctx, 6, STRIP - 6, W - 12, H - STRIP, 12);
       ctx.fill();
@@ -302,19 +379,40 @@ export function createView(canvas, { onAction, onPick } = {}) {
       ctx.fillText('阶梯已成', W / 2, H - 22);
       ctx.textAlign = 'left';
     }
-    if (flash && performance.now() < flash.until) {
+    if (flash && flashLeft > 0) {
       ctx.fillStyle = 'rgba(255, 120, 120, 0.9)';
       ctx.font = '13px ui-sans-serif, system-ui, sans-serif';
       ctx.fillText(flash.kind, PAD, H - 12);
     }
+    if (paused) {
+      ctx.fillStyle = 'rgba(10, 12, 16, 0.55)';
+      roundRect(ctx, 6, STRIP - 6, W - 12, H - STRIP, 12);
+      ctx.fill();
+      ctx.fillStyle = GOLD;
+      ctx.font = `${Math.max(16, Math.round(geom.cardW * 0.6))}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('已暂停', W / 2, H / 2);
+      ctx.textAlign = 'left';
+    }
   }
 
+  // dt 是唯一的时间来源：位移、倒计时、相位全部按秒累加，30Hz 与 144Hz 在同一虚拟秒
+  // 上画出同一个相位。暂停时整个累加器冻住，恢复后不跳步。
   function frame(now) {
     raf = requestAnimationFrame(frame);
-    const dt = Math.min(64, now - (last || now));
+    const dt = Math.min(0.064, (now - (last || now)) / 1000);
     last = now;
-    void dt;
-    if (drag || (hintAt && now < hintAt.until) || (flash && now < flash.until)) draw();
+    if (paused) return;
+    animClock += dt;
+    if (hintLeft > 0) hintLeft = Math.max(0, hintLeft - dt);
+    if (flashLeft > 0) {
+      flashLeft = Math.max(0, flashLeft - dt);
+      if (!flashLeft) flash = null;
+    }
+    if (drag || hintLeft > 0 || flashLeft > 0 || dirty) {
+      dirty = false;
+      draw();
+    }
   }
 
   canvas.addEventListener('pointerdown', down);
@@ -328,6 +426,11 @@ export function createView(canvas, { onAction, onPick } = {}) {
       target = next && next.target ? next.target.slice() : [];
       drag = null;
       hintAt = null;
+      hintLeft = 0;
+      flash = null;
+      flashLeft = 0;
+      animClock = 0;
+      last = 0;
       measure();
     },
     measure,
@@ -356,14 +459,37 @@ export function createView(canvas, { onAction, onPick } = {}) {
     },
     showHint(action) {
       if (!action) return;
-      if (action.kind === 'split') hintAt = { i: action.i, j: action.j, until: performance.now() + 2400 };
-      else if (action.kind === 'merge') hintAt = { i: action.a, j: action.b, until: performance.now() + 2400 };
-      else hintAt = { i: -1, j: -1, until: performance.now() + 2400 };
+      if (action.kind === 'split') hintAt = { i: action.i, j: action.j };
+      else if (action.kind === 'merge') hintAt = { i: action.a, j: action.b };
+      else hintAt = { i: -1, j: -1 };
+      hintLeft = 2.4;
+      dirty = true;
       draw();
     },
     flash(reason) {
-      flash = { kind: reason || '不合法', until: performance.now() + 1600 };
+      flash = { kind: reason || '不合法' };
+      flashLeft = 1.6;
+      dirty = true;
       draw();
+    },
+    setTextures,
+    setPaused(on) {
+      paused = !!on;
+      if (paused) drag = null;
+      else last = 0;          // 恢复时不吃掉暂停期间的整段墙钟
+      dirty = true;
+      draw();
+      return paused;
+    },
+    setReducedMotion(on) {
+      reduceMotion = !!on;
+      dirty = true;
+      draw();
+      return reduceMotion;
+    },
+    // 对拍要读的就是这几个数：全部由 dt 积分而来，帧率换了它们也必须落在同一个虚拟秒上。
+    clock() {
+      return { animClock, hintLeft, flashLeft, paused, reduceMotion, dirty };
     },
     start() {
       if (!raf) { last = 0; raf = requestAnimationFrame(frame); }
