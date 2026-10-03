@@ -38,6 +38,12 @@ export function createView(canvas, { onAction, onPick } = {}) {
   let flash = null; // { kind, until } — a refusal or a landed deal
   let hintAt = null; // { i, j, until }
   let raf = 0;
+  // ---- 减弱动效（prefers-reduced-motion）----
+  // 被指出的那张牌的描边环按 t = (now % 900) / 900 变粗变淡，是纯装饰。
+  // 减弱动效下把 t 钉在 0.5：环照画、牌照指，只停相位。
+  let reduceMotion = false;
+  const ringPhase = () => (reduceMotion ? 0.5 : (performance.now() % 900) / 900);
+
   let last = 0;
 
   // ---- geometry --------------------------------------------------------------------
@@ -259,7 +265,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
       ctx.stroke();
     }
     if (hinted) {
-      const t = (performance.now() % 900) / 900;
+      const t = ringPhase();
       ctx.strokeStyle = `rgba(120, 220, 255, ${(0.85 - t * 0.5).toFixed(3)})`;
       ctx.lineWidth = 2 + t * 4;
       roundRect(ctx, x - 4 - t * 5, geom.oy - 4 - t * 5, cardW + 8 + t * 10, (size - 1) * step + cardH + 8 + t * 10, Math.round(cardW * 0.18));
@@ -330,6 +336,16 @@ export function createView(canvas, { onAction, onPick } = {}) {
       hintAt = null;
       measure();
     },
+    // The gate the runtime pref flip lands on: idempotent, and repaints so a player who
+    // toggles the OS switch sees the ring settle on the same frame, not at the next hint.
+    setReduceMotion(v) {
+      const on = !!v;
+      if (on === reduceMotion) return reduceMotion;
+      reduceMotion = on;
+      if (reduceMotion) draw();
+      return reduceMotion;
+    },
+    isReducedMotion: () => reduceMotion,
     measure,
     redraw: draw,
     geometry() { return geom ? { slot: geom.slot, cardW: geom.cardW, cardH: geom.cardH, step: geom.step, ox: geom.ox, oy: geom.oy, W: geom.W, H: geom.H } : null; },
