@@ -180,7 +180,7 @@ js/core/storage.js   132 行 / 4,202 B    一个 key（staircase.save.v1）、�
 js/core/rng.js        49 行 / 1,523 B    hashSeed（FNV-1a 派生的两轮 UTF-16 混合）+ mulberry32
 js/data/lots.js       37 行 / 11,097 B   构建期产物：27 关 + TIERS_META + BAKED_AT，每行自带 spec
 server.cjs            70 行 / 2,326 B    零依赖静态服务（CommonJS，Electron 也 require 它）
-tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘前的 12 处 throw + 打印那 18 行 proof / tools/assemble-site / tools/deploy-set / tools/deploy-set-selftest
+tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘前的 12 处 throw + 打印那 18 行 proof
 tools/harness.mjs     41 行 / 1,251 B    node 与浏览器同形状的断言行，rows/fail 两列
 tools/playtest.mjs   597 行 / 31,169 B   裸 CDP 驱动（node 全局 fetch/WebSocket）+ 五段判据
 tools/verify.sh      131 行 / 5,188 B    生命周期：起 Chrome 与服务、预检、聚合、cleanup
