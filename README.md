@@ -98,8 +98,9 @@ rows: 14 fail: 0     rows: 11 fail: 0     rows: 17 fail: 0     rows:  8 fail: 0
 `run()` 收尾（`tools/harness.mjs:36-41`），而不是靠测试运行器发现用例。
 
 `tools/` 里没有 `check.mjs`、没有 `balance.mjs`、没有 `golden*`、没有 `counter-test`：
-`tools/` 一共四个文件（`bake.mjs` 179 行、`harness.mjs` 41 行、`playtest.mjs` 597 行、
-`verify.sh` 131 行）。别处如果写"七套 suite"或"平衡闸"，在这个仓都没有对应物。
+`tools/` 一共七个文件（`assemble-site.sh` 31 行、`bake.mjs` 179 行、`deploy-set.mjs` 347 行、
+`deploy-set-selftest.mjs` 316 行、`harness.mjs` 41 行、`playtest.mjs` 597 行、
+`verify.sh` 136 行）。别处如果写"七套 suite"或"平衡闸"，在这个仓都没有对应物。
 
 ## 四、门禁清单：每套判什么、本轮交回几条
 
@@ -144,7 +145,7 @@ max BFS states 1692 · slowest par-proof 196ms · total 0.5s
 `boot play routes save pointer`，每段交回 `rows/fail` 两个数（`verify.sh:101-122`），
 判据本体全在 `tools/playtest.mjs` 的 `SCENARIOS`（`tools/playtest.mjs:360-592`）与
 `pointerScenario()`（`tools/playtest.mjs:171-357`）。**源码里没有钉"每段该交回几条"的期望值**，
-`fail` 为空就 `exit 0`（`verify.sh:121`、`verify.sh:130-131`），所以本仓**没有**
+`fail` 为空就 `exit 0`（`verify.sh:121`、`verify.sh:135-136`），所以本仓**没有**
 "少一条断言就红"这类地板。能给的只有静态计数（`rec()` 调用点，`tools/playtest.mjs`）：
 
 | 段 | 判什么 | 必然执行的 `rec()` 数 |
@@ -183,7 +184,9 @@ server.cjs            70 行 / 2,326 B    零依赖静态服务（CommonJS，Ele
 tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘前的 12 处 throw + 打印那 18 行 proof
 tools/harness.mjs     41 行 / 1,251 B    node 与浏览器同形状的断言行，rows/fail 两列
 tools/playtest.mjs   597 行 / 31,169 B   裸 CDP 驱动（node 全局 fetch/WebSocket）+ 五段判据
-tools/verify.sh      131 行 / 5,188 B    生命周期：起 Chrome 与服务、预检、聚合、cleanup
+tools/deploy-set.mjs 347 行 / 19,262 B  产物闸：按 pages.yml 那份清单真拷一遍产物，要求页面会去要的每个 URL 都在产物里（W/R/P 三族）
+tools/deploy-set-selftest.mjs 316 行 / 19,029 B  上面那道闸自己的台架：每一类断言当场打红一次，外加阴性对照
+tools/verify.sh      136 行 / 5,535 B    生命周期：起 Chrome 与服务、预检、聚合、cleanup，收尾跑部署集双闸
 test/*.test.mjs      8 个文件（deal 170 / game 158 / library 150 / make 158 / partition 112 / repo 150 / solve 170 / storage 99 行）
 electron/main.cjs     36 行              桌面壳：startServer({port: 0}) 起临时端口再 loadURL
 .github/workflows/ci.yml     50 行       unit job（Syntax + Suites）与 browser job（SKIP_UNIT=1、WD_TIMEOUT=240）
@@ -280,7 +283,7 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 （`tools/verify.sh:36-39`，`lsof -nP -iTCP -sTCP:LISTEN`）、`exit 3` DevTools 始终没在
 `:$CDP_PORT` 上绑定（`tools/verify.sh:61-66`）、`exit 4` 静态服务始终没答 `BASE`
 （`tools/verify.sh:67-72`）、`exit 5` 页面里始终没有 `window.stair.state.id`
-（`tools/verify.sh:92-97`），其余失败走 `FAILED=1` 那条汇总（`tools/verify.sh:75,130-131`）。
+（`tools/verify.sh:92-97`），其余失败走 `FAILED=1` 那条汇总（`tools/verify.sh:75,133-136`）。
 两处值得注意的不对称：预检**只查 web 口**，CDP 口 9353 不查，占了就撞上别人家的浏览器
 （`tools/verify.sh:36` 那一个 `if`，`verify.sh:8-10` 把这条留给人工 `pgrep`）；
 截图目录默认落在仓外的 `/tmp/puzzle-brief/shots`（`tools/verify.sh:24`），
