@@ -92,11 +92,11 @@ test('the CI syntax step covers exactly the file set `npm run check` covers', ()
 
 test('pages.yml copies only what the page can reach', () => {
   const pages = read('.github/workflows/pages.yml');
-  ok(/cp index.html _site\//.test(pages));
-  ok(/cp -r css js _site\//.test(pages));
+  const list = read('tools/assemble-site.sh').split('\n').filter((l) => /^\s*(cp |for d in )/.test(l)).join('\n');
+  ok(/run: bash tools\/assemble-site\.sh _site/.test(pages), 'workflow 只调那一份清单，不再手抄 cp 行');
+  ok(/cp index\.html manifest\.webmanifest sw\.js/.test(list) && /cp -r css js/.test(list), '清单里就是 index.html + manifest + sw + css/ js');
+  ok(!/tools\/|test\/|server\.cjs|electron/.test(list), 'the list must not carry tools/, tests or the server into the artifact');
   ok(!/path: \.\s*$/m.test(pages), 'never publish the whole repo as the site');
-  ok(!/tools|test\/|server\.cjs|electron/.test(pages.split('Assemble static site')[1].split('uses: actions/configure-pages')[0]),
-    'the build step must not carry tools/, tests or the server into the artifact');
 });
 
 test('this repo owns its own ports and says so', () => {

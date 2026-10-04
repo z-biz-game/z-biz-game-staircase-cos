@@ -60,7 +60,7 @@
 | `par` 是"没有更短"的证明，不是搜索器自己给自己打分 | `npm test`（`test/solve.test.mjs`）+ `node tools/bake.mjs` | `T_k` 最难的开局正好要 `k` 步、且 `unreachable === 0`，五档全查（`test/solve.test.mjs:99-109`）；`distanceMap` 反向 BFS 的读数必须逐个等于单点 `solve()` 的读数，10 张牌 42 个开局全比（`test/solve.test.mjs:111-121`）；`parProof` 要求分层 / 正向 / 反向三条路同数且边表闭合（`test/solve.test.mjs:129-138`，实现 `js/core/solve.js:159-185`）；`buildGraph` 对 15 张牌必须闭合且恰好覆盖 p(15)=176 个局面（`test/solve.test.mjs:140-150`）；超限的搜索必须报 `capped` 而不是猜一个数（`test/solve.test.mjs:152-156`）；bake 侧是 `tools/bake.mjs:122,123,134` | 本轮 `rows: 17 fail: 0`；bake 本轮打印 5 行 `proof par-map …` + 7 行三路对账 |
 | 出题器不许把玩家骗进"数不对的题"：拒绝要说理由，接受要能回放 | `npm test`（`test/make.test.mjs`） | `rateLot` 的五条出口逐个点名（`js/core/make.js:39-49`；断言 `test/make.test.mjs:77-85`，其中 `[6,2,1]`→`par 3 不在带内`、`[1×6]`→`开局即目标`）；生成盘必须 `2 ≤ par ≤ steps`、`path.length === par`、attractor 前缀与 `k` 一致（`test/make.test.mjs:87-102`，四档各 25 颗 seed）；`partitionsOf` 的枚举顺序是生成器契约，写死三条（`test/make.test.mjs:152-156`） | 本轮 `rows: 13 fail: 0` |
 | 同一颗 seed = 同一副牌；每日题在任何设备上是同一副 | `npm test`（`test/make.test.mjs`） | `hashSeed('a') === 723832900` 且必须**不等于**公开 FNV-1a 的 `3826002220`（`test/make.test.mjs:16-27`，实现 `js/core/rng.js:4-13`）；同一 seed 连跑两次逐字段相同、不同 seed 不许撞（`test/make.test.mjs:104-115`）；`dailyLot('2026-09-27')` 两次同盘、次日必须是另一副、而且本机 `targetOf` 重算必须与盘上数字一致（`test/make.test.mjs:125-138`）；`#/random` 四条档位分别同 token 同盘（`test/make.test.mjs:140-150`） | 本轮 `rows: 13 fail: 0`（与上一条共用套件）；本轮另跑 3 次 `makeLotTrying('frozen-seed','twined')`，三次逐字相同：`frozen-seed|4|10,1,1,1,1,1|4` |
-| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 与本地文件集不许漂、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 的 Syntax 步骤 glob 集合必须与 `npm run check` 完全一致（`test/repo.test.mjs:83-91`）；`pages.yml` 只许 `cp index.html` + `cp -r css js`（`test/repo.test.mjs:93-100`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:102-116`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:118-126`） | 本轮 `rows: 11 fail: 0` |
+| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 与本地文件集不许漂、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 的 Syntax 步骤 glob 集合必须与 `npm run check` 完全一致（`test/repo.test.mjs:83-91`）；`pages.yml` 只许调 `tools/assemble-site.sh` 那一份清单，清单里是 `index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`（`test/repo.test.mjs:93-100`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:102-116`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:118-126`） | 本轮 `rows: 11 fail: 0` |
 
 ## 三、怎么跑：`package.json` 的 8 条脚本逐条核对
 
@@ -180,7 +180,7 @@ js/core/storage.js   132 行 / 4,202 B    一个 key（staircase.save.v1）、�
 js/core/rng.js        49 行 / 1,523 B    hashSeed（FNV-1a 派生的两轮 UTF-16 混合）+ mulberry32
 js/data/lots.js       37 行 / 11,097 B   构建期产物：27 关 + TIERS_META + BAKED_AT，每行自带 spec
 server.cjs            70 行 / 2,326 B    零依赖静态服务（CommonJS，Electron 也 require 它）
-tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘前的 12 处 throw + 打印那 18 行 proof
+tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘前的 12 处 throw + 打印那 18 行 proof / tools/assemble-site / tools/deploy-set / tools/deploy-set-selftest
 tools/harness.mjs     41 行 / 1,251 B    node 与浏览器同形状的断言行，rows/fail 两列
 tools/playtest.mjs   597 行 / 31,169 B   裸 CDP 驱动（node 全局 fetch/WebSocket）+ 五段判据
 tools/verify.sh      131 行 / 5,188 B    生命周期：起 Chrome 与服务、预检、聚合、cleanup
@@ -307,3 +307,45 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 | **不承诺关卡数量是 27** | 门是地板不是等号：`test/library.test.mjs:15` 与 `test/repo.test.mjs:142` 都只要求 `≥ 24`。27 是本轮 bake 重烤并 `diff` 之后确认的当前出厂数（`wrote 27 lots (shoal:5 linked:7 twined:8 master:7)`），`master` 那一档本来想要 8 关、实际 7 关并在 stderr 里明说（`tools/bake.mjs:53`）。 | `test/library.test.mjs:15`、`test/repo.test.mjs:142`、本轮副本 bake 输出 |
 
 License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test.mjs:128-134` 核对）。
+
+## 上线的到底是哪一批文件
+
+这个仓没有打包器：站点=一次文件拷贝。以前「拷哪些」写在 `pages.yml` 的 `run:` 里（手抄的几行
+`cp`）。本地 `index.html` 直读仓库根，永远自洽；线上却按那份清单拷，于是页面后来引用的
+`manifest.webmanifest`、`sw.js`、`icons/*` 可能一个都没上去——线上 404，而仓里的引擎测试与
+真浏览器闸全绿，因为它们跑的都是仓库根，没有任何一步在「按清单拷」的那个环境下加载过页面。
+
+现在清单只有一份，住在 `tools/assemble-site.sh`：CI 调它拷 `_site`，本地闸调它拷临时目录，
+然后**对拷出来的产物**提要求（`tools/deploy-set.mjs`）：
+
+- **W 清单与页面同源**：`pages.yml` 里必须真有 `run: bash tools/assemble-site.sh <dir>` 这一行，
+  `ci.yml` 里必须真有 `run: node tools/deploy-set.mjs`。认的是调用那一行，不是文件里出现过这个
+  路径——注释里本来就会写它，只 grep 字符串会被一句散文喂绿。
+- **R 引用可达**：引用不靠手打名单。从 `index.html` 的 `href/src` 出发，凡解析出来是 `.js`/`.css`
+  的就把那一站也扫一遍（CSS 的 `url()`、JS 去掉注释后的 `'./…'` 字面量、`new URL(x, base)` 的两种
+  基、`navigator.serviceWorker.register`、`scope`），`manifest` 的 icons/screenshots/shortcuts 各自
+  的 `src` 也算引用。取径上读不到的那一站本身就是红（读不到＝这一站根本没扫）。每条引用都必须在
+  产物里且非 0 字节；绝对路径单列一条红，因为 Pages 挂在 `/<repo>/` 前缀下会跳出去。
+- **P 位图不许说谎**：`manifest` 声明的 `sizes` 必须等于 PNG IHDR 的真实宽高——文件图标读文件头，
+  内联成 base64 的图标先解码再读同一段。后一条不是可选项：仓里零二进制文件的承诺（本仓自己的测试钉着）
+  只约束"有没有 .png 这个文件"，图标于是住在清单里；如果 P 段只筛文件名，声明写 512 而真图 192 就一路放行。
+- **钉住两个数**：R 段实际检查的路径条数（`29`）与这一次跑的断言条数（`49`），两个数
+  都钉在 `tools/deploy-set.mjs` 顶部的那对常量里。没改页面却掉了，说明解析断了；删掉一张图标会同时
+  少一条 R10 与那张的 P1/P2，所以两个数一起钉，断言条数能漂就是闸在缩水的信号。这一节故意只写数值、
+  不写那对常量的名字：本仓原有的文档闸会拿"文档里出现过的同名标识号"回数它自己的条数（skyscraper
+  的 D14b 就是这种钉法），两道闸共用一个名字就互相打红。
+
+`tools/deploy-set-selftest.mjs` 是这两颗钉的阳性证明：它把仓库复制到临时目录，照着每一类断言
+各下一刀（X1 清单不收位图目录 / X2 模块边改名 / X3 CSS 写绝对路径 / X4 `start_url` 绝对 /
+X5 删光 >=512 图标 / X6 少一个必填字段 / X7 声明尺寸与真图不符 / X8 workflow 不调脚本 /
+X9 CI 不跑闸 / X10 是阴性对照——往入口 JS 追加一行只写在注释里的假路径，闸必须仍然绿、条数仍然
+`29`、断言仍然 `49`；X11 og:image 退回相对路径 / X12 og:image 的前缀指向别的 slug /
+X13 内联位图谎报尺寸——只在有靶子时下：X11/X12 要页面上那句 og:image，X13 要清单里真有一段 base64
+图标，没有就打印 SKIP；反过来 X1 没有位图目录可砍时改砍 css，P 段一位都不核时台架直接报靶子不够），
+要求每一刀都让闸**点名**变红。靶子从 `DEPLOY_SET_DUMP=1`
+的出处表现挑（取径真的会读的那支 JS / 那一张 CSS，不写死某一个仓的入口名），所以页面改了、仓与仓
+不同，台架跟着走。
+
+`node tools/deploy-set.mjs` 与 `node tools/deploy-set-selftest.mjs` 就是 CI 跑的那两条命令本身
+（package.json 里的 `deploy-set` / `deploy-set:selftest` 只是同一支脚本的 npm 入口）；把它们接进本仓
+那条浏览器 one-shot（`tools/verify.sh`）还欠着——那道脚本的腿名单与条数钉是每个仓自己的形状。
