@@ -86,6 +86,12 @@ export function createView(canvas, { onAction, onPick } = {}) {
   }
 
   // ---- geometry --------------------------------------------------------------------
+  // 一列牌堆的拇指命中宽度下限：44px 是 Apple HIG / WCAG 2.5.5 同一条，不是装饰。
+  // 窄屏上原本算得出 15.6px 的列（master-07 在 343px 下 19 堆），点歪一格就并错堆，
+  // 所以放不下就换行——行数是堆数的函数，几何每次 measure() 重算。
+  const MIN_TOUCH = 44;
+  const ROW_GAP = 12;
+
   function measure() {
     const box = canvas.getBoundingClientRect();
     const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
@@ -96,25 +102,56 @@ export function createView(canvas, { onAction, onPick } = {}) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!game) { geom = null; return; }
     const piles = game.piles;
-    const slots = Math.max(4, piles.length + 1);
     const usable = W - PAD * 2;
-    const slot = usable / slots;
-    const cardW = Math.max(22, Math.floor(Math.min(slot * 0.82, (H - STRIP - PAD * 2) / 1.4)));
+    // 一排摆几列：既不能超过堆数+牌库，也不能让列宽掉到 44px 以下（最少仍留 4 列，
+    // 否则单垛关卡在宽屏上会把一张牌放大到半块画布 —— 那是换行前就有的下限）。
+    const columns = Math.max(4, Math.min(Math.floor(usable / MIN_TOUCH), piles.length + 1));
+    const rows = [];
+    let next = 1;  // 第一行的第 0 列是牌库
+    for (let i = 0; i < piles.length; i++) {
+      if (!rows.length || next >= columns) {
+        rows.push({ cells: [], tallest: 1 });
+        next = rows.length === 1 ? 1 : 0;
+      }
+      const row = rows[rows.length - 1];
+      row.cells.push(i);
+      row.tallest = Math.max(row.tallest, piles[i]);
+      next += 1;
+    }
+    if (!rows.length) rows.push({ cells: [], tallest: 1 });
+    // 单行时 tallest 与换行前完全一致（含 target 的最高垛），保证宽屏画面一个像素都不动。
+    if (rows.length === 1) rows[0].tallest = Math.max(...piles, ...target, 1);
+    const slot = usable / columns;
+    const cardW = Math.max(22, Math.floor(Math.min(slot * 0.82, (H - STRIP - PAD * 2) / (rows.length * 1.4))));
     const cardH = Math.round(cardW * 1.38);
     const ox = Math.round(PAD + slot * DECK + (slot - cardW) / 2);
     const oy = STRIP + PAD;
-    const tallest = Math.max(...piles, ...target, 1);
-    const room = Math.max(cardH + 4, H - oy - PAD - cardH);
-    const step = Math.max(6, Math.min(Math.round(cardH * 0.42), Math.floor(room / Math.max(1, tallest - 1))));
+    const rowBudget = (H - oy - PAD - (rows.length - 1) * ROW_GAP) / rows.length;
+    rows.forEach((row, r) => {
+      const room = Math.max(cardH + 4, rowBudget - cardH);
+      row.oy = oy + r * (rowBudget + ROW_GAP);
+      // 第 0 行的原点就是历史 ox（含牌库那一列）；换行之后的行没有牌库，从左边距起排。
+      row.x0 = r === 0 ? ox : Math.round(PAD + (slot - cardW) / 2);
+      row.step = Math.max(6, Math.min(Math.round(cardH * 0.42), Math.floor(room / Math.max(1, row.tallest - 1))));
+    });
+    const rowOf = [];
+    const colOf = [];
+    rows.forEach((row, r) => row.cells.forEach((i, c) => { rowOf[i] = r; colOf[i] = c; }));
     geom = {
-      W, H, slot, cardW, cardH, ox, oy, step,
+      W, H, slot, cardW, cardH, ox, oy, step: rows[0].step,
       deckX: Math.round(PAD + (slot * DECK - cardW) / 2),
       deckW: cardW,
       deckY: oy,
       count: piles.length,
+      columns, rows, rowOf, colOf,
       piles,
     };
     draw();
+  }
+
+  // 某一堆落在哪一行：换行之后每行有自己的顶点与露出带高度。
+  function rowMeta(i) {
+    return geom.rows[geom.rowOf[i]];
   }
 
   function localPoint(ev) {
@@ -130,7 +167,8 @@ export function createView(canvas, { onAction, onPick } = {}) {
   }
 
   function cardTop(i, j) {
-    return geom.oy + j * geom.step;
+    const row = rowMeta(i);
+    return row.oy + j * row.step;
   }
 
   // The centre of the part of card j that is actually visible: cards overlap by design, so a
@@ -138,12 +176,13 @@ export function createView(canvas, { onAction, onPick } = {}) {
   // a point to a band and `cardPoint()` returns that band's centre — if those two ever
   // disagree, a split drag lands on the wrong card.
   function cardMid(i, j) {
+    const row = rowMeta(i);
     const size = game.piles[i];
-    return j < size - 1 ? cardTop(i, j) + geom.step / 2 : cardTop(i, size - 1) + geom.cardH / 2;
+    return j < size - 1 ? cardTop(i, j) + row.step / 2 : cardTop(i, size - 1) + geom.cardH / 2;
   }
 
   function pileX(i) {
-    return geom.ox + i * geom.slot;
+    return rowMeta(i).x0 + geom.colOf[i] * geom.slot;
   }
 
   // Which pile/card a point is over. The topmost card wins on the overlap, and a pile's
@@ -152,14 +191,19 @@ export function createView(canvas, { onAction, onPick } = {}) {
     if (!geom || !game) return null;
     if (p.x >= geom.deckX && p.x <= geom.deckX + geom.deckW
       && p.y >= geom.deckY && p.y <= geom.deckY + geom.cardH) return { deck: true };
-    const i = Math.floor((p.x - geom.ox + (geom.slot - geom.cardW) / 2) / geom.slot);
-    if (i < 0 || i >= game.piles.length) return null;
-    const size = game.piles[i];
-    const bottom = cardTop(i, size - 1) + geom.cardH;
-    if (p.y < geom.oy || p.y > bottom) return null;
-    let j = Math.floor((p.y - geom.oy) / geom.step);
-    j = Math.max(0, Math.min(size - 1, j));
-    return { i, j, size };
+    for (const row of geom.rows) {
+      const c = Math.floor((p.x - row.x0 + (geom.slot - geom.cardW) / 2) / geom.slot);
+      if (c < 0) continue;
+      const i = row.cells[c];
+      if (i === undefined) continue;
+      const size = game.piles[i];
+      const bottom = cardTop(i, size - 1) + geom.cardH;
+      if (p.y < row.oy || p.y > bottom) continue;
+      let j = Math.floor((p.y - row.oy) / row.step);
+      j = Math.max(0, Math.min(size - 1, j));
+      return { i, j, size };
+    }
+    return null;
   }
 
   // ---- input -----------------------------------------------------------------------
@@ -187,7 +231,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
     drag.along = p.y - drag.from.y;
     // Cosmetic only: the cut is the card the finger grabbed, and grabbing the top card
     // would carve off nothing. js/core/solve.js applies the real rule.
-    drag.split = drag.along > Math.max(6, geom.step * 0.5) && drag.grab >= 1 ? drag.grab : 0;
+    drag.split = drag.along > Math.max(6, rowMeta(drag.i).step * 0.5) && drag.grab >= 1 ? drag.grab : 0;
     ev.preventDefault();
   }
 
@@ -298,7 +342,9 @@ export function createView(canvas, { onAction, onPick } = {}) {
   }
 
   function drawPile(i, size) {
-    const { cardW, cardH, step } = geom;
+    const { cardW, cardH } = geom;
+    const row = rowMeta(i);
+    const step = row.step;
     const x = pileX(i);
     const selected = game.selected === i;
     const hinted = !!hintAt && hintAt.i === i && hintLeft > 0;
@@ -318,14 +364,14 @@ export function createView(canvas, { onAction, onPick } = {}) {
     if (selected) {
       ctx.strokeStyle = GOLD;
       ctx.lineWidth = 2.5;
-      roundRect(ctx, x - 3, geom.oy - 3, cardW + 6, (size - 1) * step + cardH + 6, Math.round(cardW * 0.16));
+      roundRect(ctx, x - 3, row.oy - 3, cardW + 6, (size - 1) * step + cardH + 6, Math.round(cardW * 0.16));
       ctx.stroke();
     }
     if (hinted) {
       const t = reduceMotion ? 0.3 : (animClock % 0.9) / 0.9;
       ctx.strokeStyle = `rgba(120, 220, 255, ${(0.85 - t * 0.5).toFixed(3)})`;
       ctx.lineWidth = 2 + t * 4;
-      roundRect(ctx, x - 4 - t * 5, geom.oy - 4 - t * 5, cardW + 8 + t * 10, (size - 1) * step + cardH + 8 + t * 10, Math.round(cardW * 0.18));
+      roundRect(ctx, x - 4 - t * 5, row.oy - 4 - t * 5, cardW + 8 + t * 10, (size - 1) * step + cardH + 8 + t * 10, Math.round(cardW * 0.18));
       ctx.stroke();
     }
     if (cut >= 0) {
@@ -464,14 +510,14 @@ export function createView(canvas, { onAction, onPick } = {}) {
     },
     measure,
     redraw: draw,
-    geometry() { return geom ? { slot: geom.slot, cardW: geom.cardW, cardH: geom.cardH, step: geom.step, ox: geom.ox, oy: geom.oy, W: geom.W, H: geom.H, count: geom.count } : null; },
+    geometry() { return geom ? { slot: geom.slot, cardW: geom.cardW, cardH: geom.cardH, step: geom.step, ox: geom.ox, oy: geom.oy, W: geom.W, H: geom.H, count: geom.count, columns: geom.columns, rows: geom.rows.length } : null; },
     // Client-space centre of pile i, and of card j inside it: what an automated finger needs.
     pilePoint(i) {
       if (!geom || !game || i < 0 || i >= game.piles.length) return null;
       const size = game.piles[i];
       return {
         ...toClient(pileX(i) + geom.cardW / 2, cardTop(i, size - 1) + geom.cardH / 2),
-        cell: geom.cardW, size, step: geom.step,
+        cell: geom.cardW, size, step: rowMeta(i).step,
       };
     },
     cardPoint(i, j) {
@@ -479,7 +525,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
       const jj = Math.max(0, Math.min(game.piles[i] - 1, j));
       return {
         ...toClient(pileX(i) + geom.cardW / 2, cardMid(i, jj)),
-        cell: geom.cardW, j: jj, size: game.piles[i], step: geom.step,
+        cell: geom.cardW, j: jj, size: game.piles[i], step: rowMeta(i).step,
       };
     },
     deckPoint() {

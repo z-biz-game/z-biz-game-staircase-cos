@@ -260,6 +260,40 @@ test('没有 PointerEvent 时 touch/mouse 落到同一条命中路径，有 Poin
   eq(withPointer.picks, [0], '一次 pointer 点击命中一次，不多不少');
 });
 
+test('窄屏一排放不下就换行：每列命中宽度 ≥44px，跨行的堆照样点得着、拆得对', () => {
+  // 343px 是 iPhone SE 去掉 body 左右 padding 的画布宽。修前 master-07（19 堆）在这里
+  // 只有 15.6px 一列，27 关里 20 关不足 44px；换行之后列宽下限 44.4px。
+  const NARROW = { width: 343, height: 700, left: 0, top: 0 };
+  const lot = levelAt(26);                 // master-07：28 张 19 堆，最挤的一张
+  const game = createGame(lot);
+  const picks = [];
+  const actions = [];
+  const canvas = makeCanvas(NARROW);
+  const view = createView(canvas, { onAction: (a) => actions.push(a), onPick: (i) => picks.push(i) });
+  view.attach(game);
+  const g = view.geometry();
+  ok(g.rows >= 2, `19 堆在 343px 必须换行（rows=${g.rows} columns=${g.columns}）`);
+  ok(g.slot >= 44, `换行之后每列命中宽度必须 ≥44px（实测 ${g.slot.toFixed(1)}）`);
+  for (let i = 0; i < game.piles.length; i++) {
+    const p = view.pilePoint(i);
+    ok(p.x >= 0 && p.x <= NARROW.width && p.y >= 0 && p.y <= NARROW.height,
+      `第 ${i} 堆中心必须落在画布内（x=${p.x} y=${p.y}）`);
+    canvas._fire('pointerdown', { clientX: p.x, clientY: p.y, pointerId: 1 });
+    canvas._fire('pointerup', { clientX: p.x, clientY: p.y, pointerId: 1 });
+    eq(picks[picks.length - 1], i, `点第 ${i} 堆必须命中第 ${i} 堆（${JSON.stringify(game.piles)}）`);
+  }
+  eq(picks.length, game.piles.length, '一堆都不许多点出来');
+  // 拖拽拆堆的阈值按"该堆所在行的露出带"算，不是按第一行算。
+  const i = game.piles.findIndex((sz) => sz >= 2);
+  ok(i >= 0, '必须有一垛至少 2 张才谈得上拆');
+  const step = view.geometry().step;
+  const cp = view.cardPoint(i, 1);
+  canvas._fire('pointerdown', { clientX: cp.x, clientY: cp.y, pointerId: 1 });
+  canvas._fire('pointermove', { clientX: cp.x, clientY: cp.y + step, pointerId: 1 });
+  canvas._fire('pointerup', { clientX: cp.x, clientY: cp.y + step, pointerId: 1 });
+  eq(actions[actions.length - 1], { kind: 'split', i, j: 1 }, '拖第 2 张必须拆出 j=1');
+});
+
 test('拆堆改变牌堆数之后几何必须重算：新增的堆画在界内、也点得到', () => {
   // shoal-02 开局只有 3 堆，measure() 按 4 列铺；连拆三次变 6 堆，不重算就会把整堆画到画布外
   // （修前实测 343px 宽下第 6 堆中心 x=504，越界 161px；900px 宽下 x=1379，越界 479px）。
