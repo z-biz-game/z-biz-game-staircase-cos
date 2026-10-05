@@ -470,7 +470,16 @@ window.addEventListener('keydown', (ev) => {
   if (k === 'u') { el.undo.click(); return; }
   if (k === 'h') { el.hint.click(); return; }
   if (k === 'r') { el.restart.click(); return; }
-  if (k === 'd' || k === 'enter' || k === ' ') { ev.preventDefault(); el.deal.click(); return; }
+  if (k === 'd') { ev.preventDefault(); el.deal.click(); return; }
+  // 空格/回车属于当前聚焦的控件：Tab 到「暂停」再按空格，必须真的暂停，而不是顺手发一张牌。
+  // 只有焦点不在任何控件上（body 或画布）时，这两个键才是快捷发牌。
+  if (k === 'enter' || k === ' ') {
+    const focus = document.activeElement;
+    if (focus && focus !== document.body && focus !== el.canvas && typeof focus.click === 'function') return;
+    ev.preventDefault();
+    el.deal.click();
+    return;
+  }
   // 1…9 选堆：和手指的"点两堆即并"走同一个 pick()，所以键盘不可能并出规则外的堆。
   if (k >= '1' && k <= '9') {
     const i = Number(k) - 1;
