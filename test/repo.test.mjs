@@ -1,4 +1,5 @@
 // The repo itself as a gate: zero dependencies, the shipped images being real images the
+import { spawnSync } from 'node:child_process';
 // generator can reproduce, the three layers not bleeding into each other, the CI file set
 // matching `npm run check`, and the two places the display name is written agreeing.
 // Every row here is a claim someone could otherwise make in a README without anything
@@ -150,6 +151,20 @@ test('every image the shell points at exists, and the generator can reproduce it
   for (const f of IMAGES) ok(gen.includes(`'${f}'`), `${f} is shipped but not in the generator's ASSETS table`);
   ok(/def write_png|zlib\.compress/.test(gen), 'the generator must hand-write PNGs with stdlib only');
   ok(!/import PIL|import numpy|require\(/.test(gen), 'the generator must not need a dependency this repo does not have');
+});
+
+// 名字里的"can reproduce"必须真的重画一遍：只看生成器源码有没有点名这张图，
+// 是字符串检查，图内容与源码分家时它照样绿。gen_art.py --verify 会把 19 张资产
+// 逐字节重画并与盘上比（本机实测 12.8s，一次性的）。
+test('the generator redraws every shipped image byte-for-byte', () => {
+  const py = spawnSync('python3', [join(root, 'assets/gen/gen_art.py'), '--verify'], { encoding: 'utf8', timeout: 180000 });
+  ok(!py.error, `python3 不在 PATH 上，资产可复现这条就无法复核：${py.error && py.error.code}`);
+  eq(py.status, 0, `gen_art.py --verify 退出码 ${py.status}:\n${py.stdout}\n${py.stderr}`);
+  const lines = py.stdout.split('\n');
+  for (const f of [...IMAGES, 'assets/build/icon.icns', 'assets/build/icon.ico']) {
+    const row = lines.find((l) => l.trim().startsWith(f));
+    ok(row && row.includes('一致'), `${f} 没有"可复现"的读数：${row || '(生成器没提到它)'}`);
+  }
 });
 
 test('the manifest and the worker describe the same installable app that is on disk', () => {
