@@ -111,6 +111,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
       deckX: Math.round(PAD + (slot * DECK - cardW) / 2),
       deckW: cardW,
       deckY: oy,
+      count: piles.length,
       piles,
     };
     draw();
@@ -343,6 +344,9 @@ export function createView(canvas, { onAction, onPick } = {}) {
 
   function draw() {
     if (!geom) return;
+    // 几何跟着状态走：拆/并堆改变牌堆数，而 js/main.js 的 commit() 只 redraw()。不重 measure
+    // 就会把新增的整堆画到画布外（实测 900px 宽下第 6 堆中心 x=1379，越界 479px，手指也点不到）。
+    if (game && game.piles.length !== geom.count) { measure(); return; }
     const { W, H } = geom;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = BG;
@@ -460,7 +464,7 @@ export function createView(canvas, { onAction, onPick } = {}) {
     },
     measure,
     redraw: draw,
-    geometry() { return geom ? { slot: geom.slot, cardW: geom.cardW, cardH: geom.cardH, step: geom.step, ox: geom.ox, oy: geom.oy, W: geom.W, H: geom.H } : null; },
+    geometry() { return geom ? { slot: geom.slot, cardW: geom.cardW, cardH: geom.cardH, step: geom.step, ox: geom.ox, oy: geom.oy, W: geom.W, H: geom.H, count: geom.count } : null; },
     // Client-space centre of pile i, and of card j inside it: what an automated finger needs.
     pilePoint(i) {
       if (!geom || !game || i < 0 || i >= game.piles.length) return null;

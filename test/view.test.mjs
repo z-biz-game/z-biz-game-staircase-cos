@@ -67,12 +67,12 @@ globalThis.window = globalThis;
 globalThis.devicePixelRatio = 2;
 globalThis.matchMedia = (q) => ({ matches: false, media: q, addEventListener() {}, addListener() {} });
 
-function openLot(i = 3) {
+function openLot(i = 3, box = CSS_BOX) {
   const lot = levelAt(i);
   const game = createGame(lot);
   const picks = [];
   const actions = [];
-  const canvas = makeCanvas();
+  const canvas = makeCanvas(box);
   const view = createView(canvas, {
     onAction: (a) => { actions.push(a); act(game, a); },
     onPick: (i2) => { picks.push(i2); if (game.selected === null) select(game, i2); else act(game, { kind: 'merge', a: game.selected, b: i2 }); },
@@ -258,6 +258,33 @@ test('没有 PointerEvent 时 touch/mouse 落到同一条命中路径，有 Poin
   withPointer.canvas._fire('pointerdown', { clientX: q0.x, clientY: q0.y, pointerId: 1 });
   withPointer.canvas._fire('pointerup', { clientX: q0.x, clientY: q0.y, pointerId: 1 });
   eq(withPointer.picks, [0], '一次 pointer 点击命中一次，不多不少');
+});
+
+test('拆堆改变牌堆数之后几何必须重算：新增的堆画在界内、也点得到', () => {
+  // shoal-02 开局只有 3 堆，measure() 按 4 列铺；连拆三次变 6 堆，不重算就会把整堆画到画布外
+  // （修前实测 343px 宽下第 6 堆中心 x=504，越界 161px；900px 宽下 x=1379，越界 479px）。
+  const NARROW = { width: 343, height: 560, left: 0, top: 0 };
+  const { game, view, canvas, picks } = openLot(1, NARROW);
+  const n0 = game.piles.length;
+  let split = 0;
+  while (split < 3) {
+    const i = game.piles.findIndex((sz) => sz >= 2);
+    if (i < 0) break;
+    act(game, { kind: 'split', i, j: 1 });
+    split += 1;
+    view.redraw();          // js/main.js 的 commit() 走的就是这条路：只 redraw，不 measure
+  }
+  eq([split, game.piles.length > n0], [3, true], `必须真的把牌堆数拆大（${n0}→${game.piles.length}）`);
+  const g = view.geometry();
+  eq(g.count, game.piles.length, `几何必须按新的堆数重算：geom.count=${g.count} 堆数=${game.piles.length}`);
+  ok(g.slot < NARROW.width / game.piles.length + 1, `列宽必须收窄到放得下：slot=${g.slot}`);
+  for (let i = 0; i < game.piles.length; i++) {
+    const p = view.pilePoint(i);
+    ok(p && p.x >= 0 && p.x <= NARROW.width, `第 ${i} 堆中心 x=${p && p.x} 必须落在画布 [0,${NARROW.width}] 内`);
+    canvas._fire('pointerdown', { clientX: p.x, clientY: p.y, pointerId: 1 });
+    canvas._fire('pointerup', { clientX: p.x, clientY: p.y, pointerId: 1 });
+    eq(picks[picks.length - 1], i, `点第 ${i} 堆的必须命中第 ${i} 堆（实到 ${picks[picks.length - 1]}）`);
+  }
 });
 
 run();
