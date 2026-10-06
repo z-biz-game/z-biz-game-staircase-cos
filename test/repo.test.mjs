@@ -100,7 +100,7 @@ test('the CI syntax step IS `npm run check`, and that leg reaches every source f
   ok(sources.length >= 20 && patterns.length >= 5,
     `防空转：树上 ${sources.length} 个源码文件、leg ${patterns.length} 条通配，两个数都太小就是扫描自己坏了`);
   ok(/SKIP_UNIT: 1/.test(ci), 'the browser job must not re-run the node suites');
-  ok(ci.includes('node "$f"'), 'CI runs each test file, so a failing row fails the job');
+  ok(/- name: Suites\n\s+run: npm run unit/.test(ci) && /\bnode "\$f"/.test(pkg.scripts.unit || '') && /exit 1/.test(pkg.scripts.unit || ''), 'CI 调 `npm run unit`，而那条 leg 自己逐个 node 每个测试文件、任一非零立即退（把手抄 loop 加回 CI 不会让它更真）');
 });
 
 test('pages.yml copies only what the page can reach', () => {
