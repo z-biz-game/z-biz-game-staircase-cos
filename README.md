@@ -60,7 +60,7 @@
 | `par` 是"没有更短"的证明，不是搜索器自己给自己打分 | `npm test`（`test/solve.test.mjs`）+ `node tools/bake.mjs` | `T_k` 最难的开局正好要 `k` 步、且 `unreachable === 0`，五档全查（`test/solve.test.mjs:99-109`）；`distanceMap` 反向 BFS 的读数必须逐个等于单点 `solve()` 的读数，10 张牌 42 个开局全比（`test/solve.test.mjs:111-121`）；`parProof` 要求分层 / 正向 / 反向三条路同数且边表闭合（`test/solve.test.mjs:129-138`，实现 `js/core/solve.js:159-185`）；`buildGraph` 对 15 张牌必须闭合且恰好覆盖 p(15)=176 个局面（`test/solve.test.mjs:140-150`）；超限的搜索必须报 `capped` 而不是猜一个数（`test/solve.test.mjs:152-156`）；bake 侧是 `tools/bake.mjs:122,123,134` | 本轮 `rows: 17 fail: 0`；bake 本轮打印 5 行 `proof par-map …` + 7 行三路对账 |
 | 出题器不许把玩家骗进"数不对的题"：拒绝要说理由，接受要能回放 | `npm test`（`test/make.test.mjs`） | `rateLot` 的五条出口逐个点名（`js/core/make.js:39-49`；断言 `test/make.test.mjs:77-85`，其中 `[6,2,1]`→`par 3 不在带内`、`[1×6]`→`开局即目标`）；生成盘必须 `2 ≤ par ≤ steps`、`path.length === par`、attractor 前缀与 `k` 一致（`test/make.test.mjs:87-102`，四档各 25 颗 seed）；`partitionsOf` 的枚举顺序是生成器契约，写死三条（`test/make.test.mjs:152-156`） | 本轮 `rows: 13 fail: 0` |
 | 同一颗 seed = 同一副牌；每日题在任何设备上是同一副 | `npm test`（`test/make.test.mjs`） | `hashSeed('a') === 723832900` 且必须**不等于**公开 FNV-1a 的 `3826002220`（`test/make.test.mjs:16-27`，实现 `js/core/rng.js:4-13`）；同一 seed 连跑两次逐字段相同、不同 seed 不许撞（`test/make.test.mjs:104-115`）；`dailyLot('2026-09-27')` 两次同盘、次日必须是另一副、而且本机 `targetOf` 重算必须与盘上数字一致（`test/make.test.mjs:125-138`）；`#/random` 四条档位分别同 token 同盘（`test/make.test.mjs:140-150`） | 本轮 `rows: 13 fail: 0`（与上一条共用套件）；本轮另跑 3 次 `makeLotTrying('frozen-seed','twined')`，三次逐字相同：`frozen-seed|4|10,1,1,1,1,1|4` |
-| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 与本地文件集不许漂、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 的 Syntax 步骤 glob 集合必须与 `npm run check` 完全一致（`test/repo.test.mjs:83-91`）；`pages.yml` 只许调 `tools/assemble-site.sh` 那一份清单，清单里是 `index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`（`test/repo.test.mjs:93-100`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:102-116`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:118-126`） | 本轮 `rows: 11 fail: 0` |
+| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 不许自己抄一份 glob 而 leg 的通配不许漏文件、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 那一步必须就是 `npm run check` 本身（把手抄的 glob 加回来就红），而那条 leg 自己的通配既不许漏掉树上任何一个 `.js/.mjs/.cjs`，也不许留下一条扫不到任何文件的死通配（`test/repo.test.mjs:83-105`）；`pages.yml` 只许调 `tools/assemble-site.sh` 那一份清单，清单里是 `index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`（`test/repo.test.mjs:107-114`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:116-130`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:132-140`） | 本轮 `rows: 11 fail: 0` |
 
 ## 三、怎么跑：`package.json` 的 8 条脚本逐条核对
 
@@ -139,7 +139,7 @@ max BFS states 1692 · slowest par-proof 196ms · total 0.5s
 （`diff` 忽略 `BAKED_AT` 那一行为空；仓里那份 11,097 B，`deliverable.md:194` 记的线上抓到的也是 11,097 B）。
 这条不要读成"重烤永远得到同一批盘"——bake 会静默重写文件，CI 也不跑它，能钉住出厂数据的只有
 `test/library.test.mjs` 那一套，而且它对关卡数只有 `≥ 24` 的地板（`test/library.test.mjs:15`、
-`test/repo.test.mjs:142`），本轮实测是 27。
+`test/repo.test.mjs:156`），本轮实测是 27。
 
 浏览器层五段（`bash tools/verify.sh`，**本轮未跑**）：`verify.sh:99` 的默认清单是
 `boot play routes save pointer`，每段交回 `rows/fail` 两个数（`verify.sh:101-122`），
@@ -196,7 +196,7 @@ DESIGN.md 135 行 / README.md（本文件）/ deliverable.md 209 行 / LICENSE /
 
 出货产物是 **13 个文件**：`index.html` + `css/game.css` + `js/` 下 11 个 `.js`（本轮
 `find js -name '*.js' | wc -l` 实测 11）。名单由 `pages.yml:29-31` 那三行决定，
-`test/repo.test.mjs:93-100` 不许它把 `tools/`、`test/`、`server.cjs`、`electron/` 带进产物，
+`test/repo.test.mjs:107-114` 不许它把 `tools/`、`test/`、`server.cjs`、`electron/` 带进产物，
 也不许写 `path: .`。
 
 ## 六、难度是怎么量出来的
@@ -258,7 +258,7 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 
 ## 七、端口与 URL 形态
 
-本仓拥有的两个号写死在源码里，也被 `test/repo.test.mjs:102-116` 按字面正则钉住：
+本仓拥有的两个号写死在源码里，也被 `test/repo.test.mjs:116-130` 按字面正则钉住：
 **web 5212**（`tools/verify.sh:22`、`server.cjs:60` 的默认值、`package.json:9` 的 `dev`、
 `tools/playtest.mjs:16` 的默认 `BASE_URL`）、**CDP 9353**（`tools/verify.sh:21`、
 `tools/playtest.mjs:13`）。`server.cjs:60` 允许 `argv[2] || process.env.PORT || 5212`，
@@ -290,7 +290,7 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 `tools/` 与 `js/` 都不含 `shots/`，所以跑过一次浏览器闸之后仓里不会多出文件。
 `verify.sh:57` 那条看门狗（默认 300 s、CI 给 240 s）会直接 `cleanup`，
 `cleanup` 里 `kill -9` 再 `wait` 两个后台 PID 并删掉 `mktemp -d` 的 profile
-（`tools/verify.sh:41-53`），这两条同样是 `test/repo.test.mjs:106-108` 按字面读的。
+（`tools/verify.sh:41-53`），这两条同样是 `test/repo.test.mjs:120-122` 按字面读的。
 
 ## 八、这个仓**不承诺**什么
 
@@ -307,9 +307,9 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 | **不承诺任何计时上界** | 计时量与结构量分家的理由写在 `DESIGN.md:81-105`，而那张计时表的来源脚本没有入库（`deliverable.md:172-174`）。本轮同一台机器重测普遍更小（daily 平均 3.9 ms vs 表内 13 ms；`slowest par-proof` 196 ms vs 表内 311–533 ms），说明这些数随负载走。所以"点击时只做有界搜索"这条是真的（`js/core/game.js:91` 的 20000 是个字面上界），"最坏 137 ms"那类话只能当某一次的读数。 | `DESIGN.md:81-105`、`js/core/game.js:88-96`、本轮观测脚本 |
 | **不承诺 `npm run electron` 能用** | 脚本在（`package.json:10`），electron 却**不是**依赖（`package.json:30-31` 两个 `{}`），`electron/main.cjs:1-4` 自己写明了这一点；本轮没跑过它。受支持的路径是 `npm run dev` / `npm start` / `bash tools/verify.sh`。 | `package.json:10,30-31`、`electron/main.cjs:1-4`、`deliverable.md:175-176` |
 | **不承诺"引擎里没有时钟"** | 静态门只查 `window.` / `document.` / `localStorage`（`test/repo.test.mjs:57-70`），没有禁 `Date`；`js/core/rng.js:44` 有 `new Date()`（每日题的日期默认值），`js/core/storage.js:99` 有 `Date.now()`（每日打卡的时刻）。这两个读数都不进 `par`/`steps` 的判定路径，但兄弟仓那句"引擎不许出现 `Date`"在本仓是假的，不要照抄。反过来 `js/core/` 里 `Math.random` 是 0 处（本轮 grep，唯一一处在 `js/main.js:254`），不过这件事**也没有门**在管。 | `test/repo.test.mjs:57-70`、`js/core/rng.js:44`、`js/core/storage.js:99`、本轮 grep |
-| **不承诺关卡数量是 27** | 门是地板不是等号：`test/library.test.mjs:15` 与 `test/repo.test.mjs:142` 都只要求 `≥ 24`。27 是本轮 bake 重烤并 `diff` 之后确认的当前出厂数（`wrote 27 lots (shoal:5 linked:7 twined:8 master:7)`），`master` 那一档本来想要 8 关、实际 7 关并在 stderr 里明说（`tools/bake.mjs:53`）。 | `test/library.test.mjs:15`、`test/repo.test.mjs:142`、本轮副本 bake 输出 |
+| **不承诺关卡数量是 27** | 门是地板不是等号：`test/library.test.mjs:15` 与 `test/repo.test.mjs:156` 都只要求 `≥ 24`。27 是本轮 bake 重烤并 `diff` 之后确认的当前出厂数（`wrote 27 lots (shoal:5 linked:7 twined:8 master:7)`），`master` 那一档本来想要 8 关、实际 7 关并在 stderr 里明说（`tools/bake.mjs:53`）。 | `test/library.test.mjs:15`、`test/repo.test.mjs:156`、本轮副本 bake 输出 |
 
-License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test.mjs:128-134` 核对）。
+License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test.mjs:142-148` 核对）。
 
 ## 上线的到底是哪一批文件
 

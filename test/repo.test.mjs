@@ -1,7 +1,7 @@
-// The repo itself as a gate: zero dependencies, no binary assets, the three layers not
-// bleeding into each other, the CI file set matching `npm run check`, and the two places the
-// display name is written agreeing. Every row here is a claim someone could otherwise make in
-// a README without anything checking it.
+// The repo itself as a gate: zero dependencies, no binary assets, the three layers not bleeding
+// into each other, CI's syntax step being the one `npm run check` whose globs reach every source
+// file, and the two places the display name is written agreeing. Every row here is a claim someone
+// could otherwise make in a README without anything checking it.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, extname } from 'node:path';
@@ -80,12 +80,25 @@ test('the view never decides legality and the shell never draws', () => {
   ok(/window\.stair = window\.staircase =/.test(main), 'the test hook is attached in the shell');
 });
 
-test('the CI syntax step covers exactly the file set `npm run check` covers', () => {
+test('the CI syntax step IS `npm run check`, and that leg reaches every source file', () => {
   const ci = read('.github/workflows/ci.yml');
   const pkg = JSON.parse(read('package.json'));
-  const globOf = (s) => [...s.matchAll(/[\w./]*\*\.[\w]+/g)].map((x) => x[0]).sort();
-  eq(globOf(ci.match(/- name: Syntax\n\s+run: (.+)/)[1]), globOf(pkg.scripts.check),
-    'CI and npm run check must disagree about nothing');
+  // 这道闸以前比的是「CI 手抄的那份通配 == package.json 里那份通配」，比的是两份抄本别漂。
+  // 现在 CI 只有 `run: npm run check` 一行，没有第二份抄本可比了——所以断言换成两件仍然
+  // 会坏的事：① CI 那一步必须真的是调用那条 leg（谁把手抄加回来就红），② 那条 leg 自己的
+  // 通配必须盖住树上每一个源码文件（漏掉一个目录=那个目录从此没人检语法），而且每条通配
+  // 都必须真的扫到东西（指向已删目录的死通配不会让任何一道闸红，除非在这里数一遍）。
+  ok(/- name: Syntax\n\s+run: npm run check/.test(ci),
+    'CI 的 Syntax 步骤必须是 `npm run check` 本身，不是它的手抄副本');
+  const patterns = pkg.scripts.check.match(/for f in ([^;]+);/)[1].trim().split(/\s+/);
+  const toRe = (p) => new RegExp('^' + p.replace(/[.+]/g, '\\$&').replace(/\*/g, '[^/]*') + '$');
+  const sources = FILES.filter((f) => /\.(js|mjs|cjs)$/.test(f));
+  const uncovered = sources.filter((f) => !patterns.some((p) => toRe(p).test(f)));
+  const dead = patterns.filter((p) => !sources.some((f) => toRe(p).test(f)));
+  eq(uncovered, [], `npm run check 的通配漏掉的源码文件（树上一共 ${sources.length} 个）`);
+  eq(dead, [], `npm run check 里一条文件都扫不到的死通配（通配共 ${patterns.length} 条）`);
+  ok(sources.length >= 20 && patterns.length >= 5,
+    `防空转：树上 ${sources.length} 个源码文件、leg ${patterns.length} 条通配，两个数都太小就是扫描自己坏了`);
   ok(/SKIP_UNIT: 1/.test(ci), 'the browser job must not re-run the node suites');
   ok(ci.includes('node "$f"'), 'CI runs each test file, so a failing row fails the job');
 });
