@@ -98,8 +98,8 @@ rows: 14 fail: 0     rows: 11 fail: 0     rows: 17 fail: 0     rows:  8 fail: 0
 `run()` 收尾（`tools/harness.mjs:36-41`），而不是靠测试运行器发现用例。
 
 `tools/` 里没有 `check.mjs`、没有 `balance.mjs`、没有 `golden*`、没有 `counter-test`：
-`tools/` 一共七个文件（`assemble-site.sh` 31 行、`bake.mjs` 179 行、`deploy-set.mjs` 347 行、
-`deploy-set-selftest.mjs` 316 行、`harness.mjs` 41 行、`playtest.mjs` 597 行、
+`tools/` 一共七个文件（`assemble-site.sh` 31 行、`bake.mjs` 179 行、`deploy-set.mjs` 400 行、
+`deploy-set-selftest.mjs` 363 行、`harness.mjs` 41 行、`playtest.mjs` 597 行、
 `verify.sh` 136 行）。别处如果写"七套 suite"或"平衡闸"，在这个仓都没有对应物。
 
 ## 四、门禁清单：每套判什么、本轮交回几条
@@ -184,8 +184,8 @@ server.cjs            70 行 / 2,326 B    零依赖静态服务（CommonJS，Ele
 tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘前的 12 处 throw + 打印那 18 行 proof
 tools/harness.mjs     41 行 / 1,251 B    node 与浏览器同形状的断言行，rows/fail 两列
 tools/playtest.mjs   597 行 / 31,169 B   裸 CDP 驱动（node 全局 fetch/WebSocket）+ 五段判据
-tools/deploy-set.mjs 347 行 / 19,262 B  产物闸：按 pages.yml 那份清单真拷一遍产物，要求页面会去要的每个 URL 都在产物里（W/R/P 三族）
-tools/deploy-set-selftest.mjs 316 行 / 19,029 B  上面那道闸自己的台架：每一类断言当场打红一次，外加阴性对照
+tools/deploy-set.mjs 400 行 / 23,283 B  产物闸：按 pages.yml 那份清单真拷一遍产物，要求页面会去要的每个 URL 都在产物里，并要求 head 自己的标签形状闭合（W/R/P/H 四族）
+tools/deploy-set-selftest.mjs 363 行 / 21,974 B  上面那道闸自己的台架：每一类断言当场打红一次，外加阴性对照
 tools/verify.sh      136 行 / 5,535 B    生命周期：起 Chrome 与服务、预检、聚合、cleanup，收尾跑部署集双闸
 test/*.test.mjs      8 个文件（deal 170 / game 158 / library 150 / make 158 / partition 112 / repo 150 / solve 170 / storage 99 行）
 electron/main.cjs     36 行              桌面壳：startServer({port: 0}) 起临时端口再 loadURL
@@ -332,22 +332,49 @@ License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test
 - **P 位图不许说谎**：`manifest` 声明的 `sizes` 必须等于 PNG IHDR 的真实宽高——文件图标读文件头，
   内联成 base64 的图标先解码再读同一段。后一条不是可选项：仓里零二进制文件的承诺（本仓自己的测试钉着）
   只约束"有没有 .png 这个文件"，图标于是住在清单里；如果 P 段只筛文件名，声明写 512 而真图 192 就一路放行。
-- **钉住两个数**：R 段实际检查的路径条数（`29`）与这一次跑的断言条数（`49`），两个数
-  都钉在 `tools/deploy-set.mjs` 顶部的那对常量里。没改页面却掉了，说明解析断了；删掉一张图标会同时
+- **H head 的语法形状**：R 段拿 `index.html` 里的字符串当引用，标签没闭合它照样读得动，于是"少一个
+  `>`"这一类坏法在 R 段全绿。H 段逐标签走一遍 head：标签之外只许出现空白，每个标签在自己的 `>` 之前
+  不许碰下一个 `<`。两种坏法各有线上后果——少一个收尾的 `>` 会把下一条 meta 吃成前一条的 attribute
+  （重复的 `content` 按规范丢弃，社交卡就少一句）；多一个裸的 `>` 是 head 里的非空白字符 token，
+  解析器到此弹出 head，后面的 `<link rel="icon">` 不再由 head 认领，Chrome 转去要 `/favicon.ico`
+  并 404，那一页的控制台从此不干净。
+- **钉住自己的条数**：R 段实际检查的路径条数（`29`）与这一次跑的断言条数（`53`），钉在
+  `tools/deploy-set.mjs` 顶部的那对常量里。没改页面却掉了，说明解析断了；删掉一张图标会同时
   少一条 R10 与那张的 P1/P2，所以两个数一起钉，断言条数能漂就是闸在缩水的信号。这一节故意只写数值、
   不写那对常量的名字：本仓原有的文档闸会拿"文档里出现过的同名标识号"回数它自己的条数（skyscraper
-  的 D14b 就是这种钉法），两道闸共用一个名字就互相打红。
+  的 D14b 就是这种钉法），两道闸共用一个名字就互相打红。H 段另钉一个数：它扫到的 head 标签条数
+  （`14`），因为"标签之间只剩空白"只在真的扫到标签时才有意义，解析断在半路的语法检查比没有更坏。
 
-`tools/deploy-set-selftest.mjs` 是这两颗钉的阳性证明：它把仓库复制到临时目录，照着每一类断言
+`tools/deploy-set-selftest.mjs` 是这几颗钉的阳性证明：它把仓库复制到临时目录，照着每一类断言
 各下一刀（X1 清单不收位图目录 / X2 模块边改名 / X3 CSS 写绝对路径 / X4 `start_url` 绝对 /
 X5 删光 >=512 图标 / X6 少一个必填字段 / X7 声明尺寸与真图不符 / X8 workflow 不调脚本 /
 X9 CI 不跑闸 / X10 是阴性对照——往入口 JS 追加一行只写在注释里的假路径，闸必须仍然绿、条数仍然
-`29`、断言仍然 `49`；X11 og:image 退回相对路径 / X12 og:image 的前缀指向别的 slug /
+`29`、断言仍然 `53`；X11 og:image 退回相对路径 / X12 og:image 的前缀指向别的 slug /
 X13 内联位图谎报尺寸——只在有靶子时下：X11/X12 要页面上那句 og:image，X13 要清单里真有一段 base64
-图标，没有就打印 SKIP；反过来 X1 没有位图目录可砍时改砍 css，P 段一位都不核时台架直接报靶子不够），
+图标，没有就打印 SKIP；反过来 X1 没有位图目录可砍时改砍 css，P 段一位都不核时台架直接报靶子不够；
+X14 把 head 里第一个标签的收尾 `>` 删掉 → 必须点名 H3 / X15 在 head 中间插一个裸的 `>` → 必须点名
+H2 / X16 删掉 head 里一条标签 → 必须点名那个 `14` / X17 是 H 段的阴性对照——往 head 里加一条含 `>`
+与 `<meta` 字样的注释，闸必须仍然绿、条数仍然 `53`。这三把刀都按**位置**切而不按字面量找针：head 里
+第一条是什么标签随仓漂，而坏法是形状不是字符串），
 要求每一刀都让闸**点名**变红。靶子从 `DEPLOY_SET_DUMP=1`
 的出处表现挑（取径真的会读的那支 JS / 那一张 CSS，不写死某一个仓的入口名），所以页面改了、仓与仓
 不同，台架跟着走。
+
+H 段不是照着假想的坏法写的：2026-10-06 本仓 `index.html` 的 `description` 那条就漏了自己的收尾
+`>`，行尾还多出一个裸 `>`（同一份 appender 在 nikoli-loops 与 pour 留下同一处，那边被浏览器闸判红，
+本仓 CI 全绿）。把修复前的那份 `index.html` 放回副本里跑这道闸，三条点名红、rc=1：
+
+```
+  FAIL H2 head 里标签之间只剩空白（多出的一个 > 就让 head 就地结束）  非空白片段 [">"]
+  FAIL H3 每个标签在自己的 > 之前不碰下一个 <（少一个收尾 > 会把下一条 meta 吃成 attribute）  吞并下一条的标签体 ["<meta name=\"description\" content=\"保加利亚梯：每次从每"]
+  FAIL H4 head 里解析到的标签条数等于钉在文件里的 EXPECT_HEAD_TAGS（14）  实际 13 条
+部署集：29 条引用（含 4 张位图尺寸核对），失败 3 项
+rows: 53 fail: 3   PREFIX_GATE_RC=1
+```
+
+修后的整闸是 `=== ALL GREEN ===`、`VERIFY_RC=0`，`node tools/deploy-set.mjs` 打 `rows: 53 fail: 0`，
+台架打 `DS_SELFTEST rc=0`。没覆盖的那一半：H 段查的是**字节层面的标签形状**，不查语义——`og:type`
+少了一条但两条 meta 都闭合时它不红，那由 R7 与浏览器闸的控制台断言管。
 
 `node tools/deploy-set.mjs` 与 `node tools/deploy-set-selftest.mjs` 就是 CI 跑的那两条命令本身
 （package.json 里的 `deploy-set` / `deploy-set:selftest` 只是同一支脚本的 npm 入口）；本仓的整闸在 `tools/verify.sh` 的 `=== deploy-set ===` 那一段也各跑一次。它们红的时候并进本仓那条出口的退出码——这一条是这么证的：
