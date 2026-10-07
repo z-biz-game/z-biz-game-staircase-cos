@@ -198,11 +198,15 @@ test('the readings this leg prints are the readings the docs print', () => {
     `文档里「认到锚点 N 条」写了 ${s.anchorClaims.length} 处：${s.anchorClaims.join('/') || '（一处都没写）'} · 闸数到 ${s.anchored}`);
 });
 
-test('seven fabricated citations are all caught, each by its own failure mode', () => {
+test('eight fabricated citations are all caught, each by its own failure mode', () => {
   const f = D.fakeCites();
   const mode = (re) => f.list.filter((x) => re.test(x)).length;
-  eq([f.caught, mode(/文件不存在/), mode(/越界/), mode(/实测/), mode(/那几行里没有/)], [7, 1, 1, 1, 4],
-    `七把假引用（不存在 / 越界 / 行数错 / 后向锚点漂 / 前向括号漂 / 「的」漂 / 调用形式漂）交回 ${f.caught} 把`);
+  // The 8th slot of the pinned array is "the blank line really was found" — if someone fills that gap,
+  // blankAt goes to 0 and the fabricated set drops to seven, so this row reddens instead of quietly
+  // losing a knife.
+  eq([f.caught, mode(/文件不存在/), mode(/越界/), mode(/实测/), mode(/那几行里没有/), mode(/整段是空行/), f.blankAt > 0],
+    [8, 1, 1, 1, 4, 1, true],
+    `八把假引用（不存在 / 越界 / 行数错 / 后向锚点漂 / 前向括号漂 / 「的」漂 / 调用形式漂 / 无锚点落在空行第 ${f.blankAt} 行）交回 ${f.caught} 把`);
 });
 
 test('five real annotation shapes, a spaced command body and a true line count read green', () => {

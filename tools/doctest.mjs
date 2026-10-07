@@ -10,8 +10,7 @@
 // exactly the drift this family keeps hitting. So the second half: the name written *glued* to the
 // citation, inside backticks, must literally appear in the lines it points at.
 //
-// Rules (identical to the other copies in this fleet — ferry / tatamibari / echo-location / creek /
-// lightsout / yajilin):
+// Rules (the same rule set every other doc-citation leg in this fleet runs):
 //   · only `path:NN` / `path:NN-MM` inside backticks are citations;
 //   · five annotation shapes produce an anchor: `name`（`path:NN`）, `path:NN`（`name`）,
 //     `path:NN` 的 `name`, `path:NN`（`fn(a, b)`）, `path:NN`（`dir/file.js::symbol`）;
@@ -23,7 +22,9 @@
 //   · a body with spaces is a command line (`npm test`), not a name: anchoring on its first word is
 //     a fabricated false red;
 //   · a gap of pure punctuation (`，`, `、`) is NOT an assertion — the previous name is just the
-//     previous list item.
+//     previous list item;
+//   · a citation whose lines are entirely whitespace is a MISS, not a hit — bounds and anchors both wave
+//     an unannotated `path:NN` through when it lands on a blank stretch.
 //
 // What this leg does NOT cover is written in README's 「没有覆盖」 column. It proves that printed line
 // numbers still sit inside the lines they describe; it does not prove the sentences around them.
@@ -138,6 +139,13 @@ export function audit(text) {
       outOfRange.push(`${label} 越界（${label.split(':')[0]} 共 ${lines.length} 行）`);
       continue;
     }
+    // "Inside the file" is not "pointing at code": an anchor-free citation whose lines are all whitespace
+    // passed both checks above, so it was reading a gap between statements as a real reference. One
+    // knife prints exactly one FAIL row, which is what makes "N fabricated cites caught" a coverage.
+    if (lines.slice(r.from - 1, r.to).join('').trim() === '') {
+      outOfRange.push(`${label} 那几行整段是空行`);
+      continue;
+    }
     if (r.anchor && !lines.slice(r.from - 1, r.to).join('\n').includes(r.anchor)) {
       anchorBad.push(`${label} 那几行里没有 ${r.anchor}`);
     }
@@ -177,13 +185,19 @@ export function scan() {
 
 // ---- controls: the leg has to prove it can bite, and prove it is not biting on its own bugs ----
 
-// Seven fabricated citations, one per failure mode. All seven must be caught by name.
+// Eight fabricated citations, one per failure mode. All eight must be caught by name. The eighth points
+// at a BLANK line, and that line is measured here at run time instead of being hardcoded: write "16"
+// down and the day someone fills that gap the knife silently stops testing anything — `blankAt > 0` in
+// the pinned row turns that day into a red instead.
 export function fakeCites() {
+  const probe = linesOf('js/core/solve.js') || [];
+  let blankAt = 0;
+  for (let i = 1; i < probe.length; i++) if (String(probe[i]).trim() === '') { blankAt = i + 1; break; }
   const f = audit('出处 `js/core/nope.js:1`、`js/core/solve.js:99999`、`NO_SUCH_NAME` 在 `js/core/solve.js:25`、' +
     '`package.json`（999 行）、`js/core/solve.js:25`（`ACTION_KINDS`）、`js/core/solve.js:25` 的 `ACTION_KINDS`、' +
-    '`js/core/solve.js:25`（`Math.max(2, 3)`）');
+    '`js/core/solve.js:25`（`Math.max(2, 3)`）' + (blankAt ? '、`js/core/solve.js:' + blankAt + '`' : ''));
   const all = [...f.outOfRange, ...f.anchorBad];
-  return { caught: all.length, list: all, refs: f.refs.length };
+  return { caught: all.length, list: all, refs: f.refs.length, blankAt };
 }
 
 // Positive controls: five real annotation shapes, a spaced command body and a real line count must all
