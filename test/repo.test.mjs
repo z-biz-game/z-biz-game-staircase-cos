@@ -160,4 +160,50 @@ test('the shipped data file is generated, and says who generated it', () => {
   }
 });
 
+// The docs carry ~200 `path:NN` citations — a reader is told to go look at a specific line of a
+// specific file. Editing the cited file shifts those numbers silently, so the range check below is
+// the only thing between "the doc was true when written" and "the doc still points at real lines".
+// It checks reachability and range, not meaning: a citation that lands inside the file but on the
+// wrong assertion stays green here.
+test('every `path:NN` citation in the docs points at lines that exist', () => {
+  const CITE = /([\w./@-]+\.(?:js|mjs|cjs|sh|json|html|css|py|md|yml|webmanifest)):(\d+)(?:-(\d+))?/g;
+  const SKIP_DIRS = new Set(['.git', 'node_modules', '_scratch', '_site']);
+  const tree = [];
+  (function dig(dir) {
+    for (const name of readdirSync(join(root, dir))) {
+      if (SKIP_DIRS.has(name)) continue;
+      const rel = dir ? join(dir, name) : name;
+      if (statSync(join(root, rel)).isDirectory()) dig(rel);
+      else tree.push(rel);
+    }
+  })('');
+  const docs = ['README.md', 'DESIGN.md', 'deliverable.md'];
+  const problems = [];
+  let seen = 0;
+  for (const doc of docs) {
+    for (const m of read(doc).matchAll(CITE)) {
+      const cited = m[1].replace(/^\.\//, '');
+      const from = Number(m[2]);
+      const to = m[3] ? Number(m[3]) : from;
+      seen += 1;
+      let target = tree.includes(cited) ? cited : null;
+      if (!target) {
+        const base = cited.split('/').pop();
+        const hits = tree.filter((f) => f.split('/').pop() === base);
+        if (hits.length !== 1) {
+          problems.push(`${doc}: \`${cited}:${m[2]}\` matches ${hits.length} files in the repo`);
+          continue;
+        }
+        target = hits[0];
+      }
+      const n = read(target).split('\n').length;
+      if (from < 1 || from > to || to > n) {
+        problems.push(`${doc}: \`${m[0]}\` is outside ${target} (it has ${n} lines)`);
+      }
+    }
+  }
+  ok(seen >= 200, `only ${seen} citations scanned across ${docs.join(' ')} — the scanner stopped reaching the docs`);
+  ok(problems.length === 0, `${problems.length} of ${seen} citations are unreachable or out of range:\n         ${problems.join('\n         ')}`);
+});
+
 run();
