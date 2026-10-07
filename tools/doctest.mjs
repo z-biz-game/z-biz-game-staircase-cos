@@ -25,6 +25,9 @@
 //     previous list item;
 //   · a citation whose lines are entirely whitespace is a MISS, not a hit — bounds and anchors both wave
 //     an unannotated `path:NN` through when it lands on a blank stretch.
+//   · an anchor matches a WHOLE identifier, not a substring: `ACTION` sitting on the line that declares
+//     `ACTION_KINDS` is a miss. Substring matching is weaker than the hand-typed list it replaced, and a
+//     short name would "appear inside" any identifier that happens to contain it.
 //
 // What this leg does NOT cover is written in README's 「没有覆盖」 column. It proves that printed line
 // numbers still sit inside the lines they describe; it does not prove the sentences around them.
@@ -127,6 +130,17 @@ export function parseRefs(text) {
   return out;
 }
 
+// Whole word, not substring: `ACTION` "appears in" the line declaring `ACTION_KINDS`, and a short name
+// matches inside any identifier that happens to contain it — so a substring matcher is weaker than the
+// hand-typed list it replaces, and it turns a real drift into a green.
+const wordCache = new Map();
+function hasWord(text, name) {
+  if (!wordCache.has(name)) {
+    wordCache.set(name, new RegExp('(^|[^A-Za-z0-9_$])' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^A-Za-z0-9_$])'));
+  }
+  return wordCache.get(name).test(text);
+}
+
 export function audit(text) {
   const refs = parseRefs(text);
   const outOfRange = [];
@@ -146,7 +160,7 @@ export function audit(text) {
       outOfRange.push(`${label} 那几行整段是空行`);
       continue;
     }
-    if (r.anchor && !lines.slice(r.from - 1, r.to).join('\n').includes(r.anchor)) {
+    if (r.anchor && !hasWord(lines.slice(r.from - 1, r.to).join('\n'), r.anchor)) {
       anchorBad.push(`${label} 那几行里没有 ${r.anchor}`);
     }
   }
@@ -193,9 +207,12 @@ export function fakeCites() {
   const probe = linesOf('js/core/solve.js') || [];
   let blankAt = 0;
   for (let i = 1; i < probe.length; i++) if (String(probe[i]).trim() === '') { blankAt = i + 1; break; }
+  // The last knife is the whole-word one: `ACTION` on the line declaring `ACTION_KINDS` can only ever be
+  // a prefix, so this is the knife that dies first if the anchor check slides back to `.includes`.
   const f = audit('出处 `js/core/nope.js:1`、`js/core/solve.js:99999`、`NO_SUCH_NAME` 在 `js/core/solve.js:25`、' +
     '`package.json`（999 行）、`js/core/solve.js:25`（`ACTION_KINDS`）、`js/core/solve.js:25` 的 `ACTION_KINDS`、' +
-    '`js/core/solve.js:25`（`Math.max(2, 3)`）' + (blankAt ? '、`js/core/solve.js:' + blankAt + '`' : ''));
+    '`js/core/solve.js:25`（`Math.max(2, 3)`）' + (blankAt ? '、`js/core/solve.js:' + blankAt + '`' : '') +
+    '、`js/core/solve.js:20`（`ACTION`）');
   const all = [...f.outOfRange, ...f.anchorBad];
   return { caught: all.length, list: all, refs: f.refs.length, blankAt };
 }

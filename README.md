@@ -60,7 +60,7 @@
 | `par` 是"没有更短"的证明，不是搜索器自己给自己打分 | `npm test`（`test/solve.test.mjs`）+ `node tools/bake.mjs` | `T_k` 最难的开局正好要 `k` 步、且 `unreachable === 0`，五档全查（`test/solve.test.mjs:99-109`）；`distanceMap` 反向 BFS 的读数必须逐个等于单点 `solve()` 的读数，10 张牌 42 个开局全比（`test/solve.test.mjs:111-121`）；`parProof` 要求分层 / 正向 / 反向三条路同数且边表闭合（`test/solve.test.mjs:129-138`，实现 `js/core/solve.js:159-185`）；`buildGraph` 对 15 张牌必须闭合且恰好覆盖 p(15)=176 个局面（`test/solve.test.mjs:140-150`）；超限的搜索必须报 `capped` 而不是猜一个数（`test/solve.test.mjs:152-156`）；bake 侧是 `tools/bake.mjs:122,123,134` | 本轮 `rows: 17 fail: 0`；bake 本轮打印 5 行 `proof par-map …` + 7 行三路对账 |
 | 出题器不许把玩家骗进"数不对的题"：拒绝要说理由，接受要能回放 | `npm test`（`test/make.test.mjs`） | `rateLot` 的五条出口逐个点名（`js/core/make.js:39-49`；断言 `test/make.test.mjs:77-85`，其中 `[6,2,1]`→`par 3 不在带内`、`[1×6]`→`开局即目标`）；生成盘必须 `2 ≤ par ≤ steps`、`path.length === par`、attractor 前缀与 `k` 一致（`test/make.test.mjs:87-102`，四档各 25 颗 seed）；`partitionsOf` 的枚举顺序是生成器契约，写死三条（`test/make.test.mjs:152-156`） | 本轮 `rows: 13 fail: 0` |
 | 同一颗 seed = 同一副牌；每日题在任何设备上是同一副 | `npm test`（`test/make.test.mjs`） | `hashSeed('a') === 723832900` 且必须**不等于**公开 FNV-1a 的 `3826002220`（`test/make.test.mjs:16-27`，实现 `js/core/rng.js:4-13`）；同一 seed 连跑两次逐字段相同、不同 seed 不许撞（`test/make.test.mjs:104-115`）；`dailyLot('2026-09-27')` 两次同盘、次日必须是另一副、而且本机 `targetOf` 重算必须与盘上数字一致（`test/make.test.mjs:125-138`）；`#/random` 四条档位分别同 token 同盘（`test/make.test.mjs:140-150`） | 本轮 `rows: 13 fail: 0`（与上一条共用套件）；本轮另跑 3 次 `makeLotTrying('frozen-seed','twined')`，三次逐字相同：`frozen-seed|4|10,1,1,1,1,1|4` |
-| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 不许自己抄一份 glob 而 leg 的通配不许漏文件、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 那一步必须就是 `npm run check` 本身（把手抄的 glob 加回来就红），而那条 leg 自己的通配既不许漏掉树上任何一个 `.js/.mjs/.cjs`，也不许留下一条扫不到任何文件的死通配（`test/repo.test.mjs:83-105`）；`pages.yml` 只许调 `tools/assemble-site.sh` 那一份清单，清单里是 `index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`（`test/repo.test.mjs:107-114`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:116-130`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:132-140`）；三份文档里每一条 `path:NN` 引用都必须落到仓内一个真实文件的行范围内，引用不存在、同名不唯一或漂出文件末尾都红；**贴着引用写在反引号里的那个名字还必须真的出现在被指的那几行里**（八行判据 `test/repo.test.mjs:174-241`，解析器是 `tools/doctest.mjs:130` 的 `audit`；地板 `refs >= 200` 与「文档印的条数 == 闸数到的条数」都由这条腿自己守，所以"文档确实被扫穿了"不靠本文报数） | 本轮 `rows: 19 fail: 0` |
+| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 不许自己抄一份 glob 而 leg 的通配不许漏文件、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 那一步必须就是 `npm run check` 本身（把手抄的 glob 加回来就红），而那条 leg 自己的通配既不许漏掉树上任何一个 `.js/.mjs/.cjs`，也不许留下一条扫不到任何文件的死通配（`test/repo.test.mjs:83-105`）；`pages.yml` 只许调 `tools/assemble-site.sh` 那一份清单，清单里是 `index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`（`test/repo.test.mjs:107-114`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:116-130`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:132-140`）；三份文档里每一条 `path:NN` 引用都必须落到仓内一个真实文件的行范围内，引用不存在、同名不唯一或漂出文件末尾都红；**贴着引用写在反引号里的那个名字还必须真的出现在被指的那几行里**（八行判据 `test/repo.test.mjs:174-243`，解析器是 `tools/doctest.mjs:144` 的 `audit`；地板 `refs >= 200` 与「文档印的条数 == 闸数到的条数」都由这条腿自己守，所以"文档确实被扫穿了"不靠本文报数） | 本轮 `rows: 19 fail: 0` |
 
 ## 三、怎么跑：`package.json` 的 8 条脚本逐条核对
 
@@ -101,33 +101,43 @@ rows: 14 fail: 0     rows: 19 fail: 0     rows: 17 fail: 0     rows:  8 fail: 0
 `tools/` 一共八个文件，每个的行数由上面那条文档腿按等式收（写歪一格就红）——
 `assemble-site.sh`（31 行）、`bake.mjs`（179 行）、`deploy-set.mjs`（400 行）、
 `deploy-set-selftest.mjs`（363 行）、`harness.mjs`（41 行）、`playtest.mjs`（597 行）、
-`verify.sh`（136 行）、`doctest.mjs`（256 行）。别处如果写"七套 suite"或"平衡闸"，在这个仓都没有对应物。
+`verify.sh`（136 行）、`doctest.mjs`（273 行）。别处如果写"七套 suite"或"平衡闸"，在这个仓都没有对应物。
 
-**文档行号对账**（`node tools/doctest.mjs` 单独复跑；判据是 `test/repo.test.mjs` 最后八行，`test/repo.test.mjs:174-241`）：
+**文档行号对账**（`node tools/doctest.mjs` 单独复跑；判据是 `test/repo.test.mjs` 最后八行，`test/repo.test.mjs:174-243`）：
 本文、DESIGN 与 deliverable 里每个数字后面都挂着 `文件:行号`，那句"行号指本仓代码"以前只有一条**界内**检查在守——
 文件在不在仓里、行号超没超过文件长度。本轮把它升到与 ferry / tatamibari / echo-location / creek / lightsout /
 yajilin 同一份规则：贴着引用写在反引号里的那个名字，必须真的出现在被指的那几行里。五种贴法都认——
 `name`（`path:NN`）、`path:NN`（`name`）、`path:NN` 的 `name`、`path:NN`（`fn(a, b)`）、
-`path:NN`（`dir/file.js::symbol`）；折名字的规则在 `tools/doctest.mjs:48`（`tokOf`），
-引用与指认怎么配对的在 `tools/doctest.mjs:95`（`parseRefs`）。为什么光查越界不够：一条引用漂到**隔壁那一行**
+`path:NN`（`dir/file.js::symbol`）；折名字的规则在 `tools/doctest.mjs:51`（`tokOf`），
+引用与指认怎么配对的在 `tools/doctest.mjs:98`（`parseRefs`）。为什么光查越界不够：一条引用漂到**隔壁那一行**
 （同一个文件、还在界内）时，界内检查一条都不会红，而这正是这一族反复撞到的漂移。
 本轮这条腿解析 248 条、认到锚点 32 条，全部在盘上、全部落回原处、没有一条整段落在空行上。
 "在界内"不等于"指到了代码"：一条不带名字的引用即使落在 1 与文件行数之间，也可能只是指到了一段行距，
 界内与锚点两道查都看不见它——所以界内检查之后还有一道，被指的区间 join 完 trim 为空就红。
-审计的文档清单由 `readdirSync` 现数（`tools/doctest.mjs:166`（`scan`）），不是手抄的三份名单——
+审计的文档清单由 `readdirSync` 现数（`tools/doctest.mjs:180`（`scan`）），不是手抄的三份名单——
 手抄的名单会让这条腿自己缩样，而它照样打印"全部在范围内"。
-控制一把不落：八把假引用逐把点名（不存在 / 越界 / 行数错 / 后向锚点漂 / 前向括号漂 / 「的」漂 / 调用形式漂 /
-无锚点落在空行——第八把指的那个行号是跑的时候现量的，写死它等于在那一天有人把空行填上之后这条断言悄悄地不再测任何东西，
-`tools/doctest.mjs:192`（`fakeCites`））；五种真注解加带空格的命令行 body（`npm test` 那种按首词钉就是一次假红）
+控制一把不落：九把假引用逐把点名（不存在 / 越界 / 行数错 / 后向锚点漂 / 前向括号漂 / 「的」漂 / 调用形式漂 /
+无锚点落在空行 / 前缀不算整词——第八把指的那个行号是跑的时候现量的，写死它等于在那一天有人把空行填上之后这条断言悄悄地不再测任何东西，
+`tools/doctest.mjs:206`（`fakeCites`））；五种真注解加带空格的命令行 body（`npm test` 那种按首词钉就是一次假红）
 在同一解析器下必须判绿；模板 body `NAME:<占位>` 取字面量前缀，一绿一红；纯标点（`，`）隔开的那个名字
 不构成指认，必须判绿；最后一把毒针只在内存里把一条界内的真引用挪歪一格，红的就是锚点那半边
-（`tools/doctest.mjs:232`（`poisonNeedle`），盘上的文档一个字不动）。
+（`tools/doctest.mjs:249`（`poisonNeedle`），盘上的文档一个字不动）。
 文档里印的「解析 248 条」与「认到锚点 32 条」由这条腿自己对账：抄错一格就红，两处数字全删掉也红
 （只删一处不算——另一处还在对账，本轮在 `_scratch` 的副本树上试过：129→130 那一格、248→247 那一格、
 以及把两处都抹掉，三把各退 1，盘上的仓库一个字没动）。
 空行那一道也在副本上验过牙：把一条界内的真引用改成指向 `js/core/solve.js` 的第一处空行，这条腿为它红、
 红行点名「那几行整段是空行」，复原后回绿（读数与判词在 `_tmp-staircase-blank-teeth.log`，`TEETH_OK`）；
-本轮两份文档里没有一条引用整段落在空行上，所以这道加严没有修掉一处漂，它堵的是"以后也没人看得见"。
+本轮三份文档里没有一条引用整段落在空行上，所以这道加严没有修掉一处漂，它堵的是"以后也没人看得见"。
+锚点认的是**整词**不是子串：`ACTION` 坐在声明 `ACTION_KINDS` 的那一行上不算命中，两侧再是字母、数字、`_`、`$`
+就不算这个标识符本身。子串口径比它替掉的那份手写清单更弱（一个短名字会"出现在"任何碰巧含它的标识符里），
+会把一次真的漂读成绿。第九把刀写的正是这种前缀，`test/repo.test.mjs` 那行钉的数组为它单开一格：这条腿哪天退回
+子串，同一行先是总数 9→8、再是那格 1→0，红在"少了一把"而不是"全部抓到"。
+换口径这一轮，三份文档里已有的带指认引用没有一条因此变红：红的全是这条腿自己插了行、文档挂着的行号漂到隔壁，
+已按真实行号逐条 grep 改回（不是放宽口径糊过去），所以这道同样是加严而不是修一处已存在的漂。
+牙也在同名副本上跑过两双腿（读数与判词在 `_tmp-staircase-word-teeth.log`，`TEETH_OK`）：A 腿把这条腿的锚点检查
+改回子串，八套 node 断言里只有"九把假引用"那一行红，而它自己那行交回的读数写成 8 把——红的是"少了一把"；
+B 腿把本文上面那条 `audit` 引用的名字截成 `aud`，锚点那一行为它红、红行点名「那几行里没有 aud」，
+改回原文两双腿都回全绿（副本基线 19 行 0 失败，与盘上同一份读数）。
 
 ## 四、门禁清单：每套判什么、本轮交回几条
 
@@ -335,7 +345,7 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 | **不承诺 `npm run electron` 能用** | 脚本在（`package.json:10`），electron 却**不是**依赖（`package.json:30-31` 两个 `{}`），`electron/main.cjs:1-4` 自己写明了这一点；本轮没跑过它。受支持的路径是 `npm run dev` / `npm start` / `bash tools/verify.sh`。 | `package.json:10,30-31`、`electron/main.cjs:1-4`、`deliverable.md:175-176` |
 | **不承诺"引擎里没有时钟"** | 静态门只查 `window.` / `document.` / `localStorage`（`test/repo.test.mjs:57-70`），没有禁 `Date`；`js/core/rng.js:44` 有 `new Date()`（每日题的日期默认值），`js/core/storage.js:99` 有 `Date.now()`（每日打卡的时刻）。这两个读数都不进 `par`/`steps` 的判定路径，但兄弟仓那句"引擎不许出现 `Date`"在本仓是假的，不要照抄。反过来 `js/core/` 里 `Math.random` 是 0 处（本轮 grep，唯一一处在 `js/main.js:254`），不过这件事**也没有门**在管。 | `test/repo.test.mjs:57-70`、`js/core/rng.js:44`、`js/core/storage.js:99`、本轮 grep |
 | **不承诺关卡数量是 27** | 门是地板不是等号：`test/library.test.mjs:15` 与 `test/repo.test.mjs:156` 都只要求 `≥ 24`。27 是本轮 bake 重烤并 `diff` 之后确认的当前出厂数（`wrote 27 lots (shoal:5 linked:7 twined:8 master:7)`），`master` 那一档本来想要 8 关、实际 7 关并在 stderr 里明说（`tools/bake.mjs:53`）。 | `test/library.test.mjs:15`、`test/repo.test.mjs:156`、本轮副本 bake 输出 |
-| **不承诺文档全量对账**（这条腿只认它看得见的指认） | 它只读**反引号里**的 `文件:行号`，而且只认贴着引用写的那个名字：隔了半句的不算、写在正文里不带反引号的不算、`path:NN` 之后用 `：MM` 续引的写法解析不到、`aria-label` 这种带连字符的名字不构成锚点——折名字的规则在 `tools/doctest.mjs:48`（`tokOf`），"纯标点不算指认"那条判断在 `tools/doctest.mjs:119`（`shaped`）。它证的是"印出来的行号还在它说的那几行里"，不是"文档每句话都对"。破坏证据也只有台架内那一份：八把假引用（`tools/doctest.mjs:192`（`fakeCites`））加一把只在内存里把一条界内真引用挪歪一格的毒针（`tools/doctest.mjs:232`（`poisonNeedle`）），本仓的盘上台架仍然只有部署集那一套 X 刀。 | `test/repo.test.mjs:174-241` |
+| **不承诺文档全量对账**（这条腿只认它看得见的指认） | 它只读**反引号里**的 `文件:行号`，而且只认贴着引用写的那个名字：隔了半句的不算、写在正文里不带反引号的不算、`path:NN` 之后用 `：MM` 续引的写法解析不到、`aria-label` 这种带连字符的名字不构成锚点——折名字的规则在 `tools/doctest.mjs:51`（`tokOf`），"纯标点不算指认"那条判断在 `tools/doctest.mjs:122`（`shaped`）。它证的是"印出来的行号还在它说的那几行里"，不是"文档每句话都对"。破坏证据也只有台架内那一份：九把假引用（`tools/doctest.mjs:206`（`fakeCites`））加一把只在内存里把一条界内真引用挪歪一格的毒针（`tools/doctest.mjs:249`（`poisonNeedle`）），本仓的盘上台架仍然只有部署集那一套 X 刀。 | `test/repo.test.mjs:174-243` |
 
 License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test.mjs:142-148` 核对）。
 
