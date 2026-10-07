@@ -12,7 +12,7 @@
 | 出厂关卡 | 27 关（shoal 5 · linked 7 · twined 8 · master 7），四档 par 带 2-3 / 3-4 / 4-4 / 5-5 |
 | 依赖数 | 0（`dependencies` 与 `devDependencies` 都是 `{}`，无打包器、无 npm install） |
 | 二进制资产 | 0（无 png/mp3/字体；favicon 是 index.html 里内联 SVG data-URI；画面全部 canvas 2D 程序绘制） |
-| node 层断言 | 104 行（8 个套件），fail 0 |
+| node 层断言 | 111 行（8 个套件），fail 0 |
 | 浏览器层断言 | 71 行（@boot @play @routes @save @pointer），fail 0，console 干净 |
 | 测试钩子 | `window.stair`（同时挂 `window.staircase` 别名） |
 | 路由 | `#/c/<n>` · `#/lot/<id>` · `#/daily`（`hashSeed("YYYY-MM-DD")`） · `#/random/<band>/<token>` |
@@ -38,8 +38,8 @@
 | `tools/harness.mjs` | node 与浏览器同形状的断言行 | `bash tools/verify.sh` 聚合行 |
 | `tools/playtest.mjs` | 零依赖 CDP 驱动（Node 全局 fetch/WebSocket） | `bash tools/verify.sh` 的 `@*` 五段 |
 | `tools/verify.sh` | 一次性验收门（web 5212 / CDP 9353，独立 Chrome profile，SKIP_UNIT） | `bash tools/verify.sh` → `=== ALL GREEN ===` |
-| `test/*.test.mjs`（8 个文件） | 104 行 node 断言 | `node --test test/`（8 tests / pass 8 / fail 0）与 `npm run unit` |
-| `test/repo.test.mjs` | 仓本身作为门禁：零依赖、无二进制资产、core 纯度、favicon 是内联 SVG、CI 文件集 == `npm run check` 文件集、pages 只拷 index.html/css/js、端口 5212/9353、README 与交付报告同名 | `node test/repo.test.mjs`（11 行） |
+| `test/*.test.mjs`（8 个文件） | 111 行 node 断言 | `node --test test/`（8 tests / pass 8 / fail 0）与 `npm run unit` |
+| `test/repo.test.mjs` | 仓本身作为门禁：零依赖、无二进制资产、core 纯度、favicon 是内联 SVG、CI 文件集 == `npm run check` 文件集、pages 只拷 index.html/css/js、端口 5212/9353、README 与交付报告同名、三份文档里每条行号引用与它的指认逐条对账 | `node test/repo.test.mjs`（19 行） |
 | `package.json` | 零依赖 + `check/unit/test/bake/verify` 脚本 | `npm run check`、`npm test`、`node test/repo.test.mjs` |
 | `server.cjs` / `electron/main.cjs` | 零依赖静态服务器（ES module 需要 origin）与桌面壳 | `bash tools/verify.sh` 全程通过它提供页面；`npm run check` 语法；`node test/repo.test.mjs` 的 `main` 字段一行 |
 | `.github/workflows/ci.yml` | unit（`node --check` 全量 + 每个 test 文件）+ browser（`SKIP_UNIT=1`） | `node test/repo.test.mjs` 断言它的 glob 集合与 `npm run check` 完全一致 |
@@ -129,10 +129,10 @@ game.test.mjs      rows: 12 fail: 0
 library.test.mjs   rows: 12 fail: 0
 make.test.mjs      rows: 13 fail: 0
 partition.test.mjs rows: 14 fail: 0
-repo.test.mjs      rows: 12 fail: 0
+repo.test.mjs      rows: 19 fail: 0
 solve.test.mjs     rows: 17 fail: 0
 storage.test.mjs   rows: 8 fail: 0
-                                     合计 104 行 / 0 失败
+                                     合计 111 行 / 0 失败
 ```
 
 ```
@@ -194,7 +194,7 @@ rows: 19 fail: 0
 | `js/data/lots.js` | 200 / 11,097 B |
 | `<title>` | `保加利亚梯 · BULGARIAN`，与 README 首行一致 |
 
-主代理自己的门禁实跑（不采信任何转述）：`npm run check` rc=0；node **104 条 / 0 失败**；
+主代理自己的门禁实跑（不采信任何转述）：`npm run check` rc=0；node **111 条 / 0 失败**；
 浏览器 **71 条 / 0 失败** 且 `=== ALL GREEN ===` 退出 0；zero-deps、0 个二进制资产、
 core purity clean、无幽灵导出、无密钥样式串。
 

@@ -160,50 +160,80 @@ test('the shipped data file is generated, and says who generated it', () => {
   }
 });
 
-// The docs carry ~200 `path:NN` citations — a reader is told to go look at a specific line of a
-// specific file. Editing the cited file shifts those numbers silently, so the range check below is
-// the only thing between "the doc was true when written" and "the doc still points at real lines".
-// It checks reachability and range, not meaning: a citation that lands inside the file but on the
-// wrong assertion stays green here.
-test('every `path:NN` citation in the docs points at lines that exist', () => {
-  const CITE = /([\w./@-]+\.(?:js|mjs|cjs|sh|json|html|css|py|md|yml|webmanifest)):(\d+)(?:-(\d+))?/g;
-  const SKIP_DIRS = new Set(['.git', 'node_modules', '_scratch', '_site']);
-  const tree = [];
-  (function dig(dir) {
-    for (const name of readdirSync(join(root, dir))) {
-      if (SKIP_DIRS.has(name)) continue;
-      const rel = dir ? join(dir, name) : name;
-      if (statSync(join(root, rel)).isDirectory()) dig(rel);
-      else tree.push(rel);
-    }
-  })('');
-  const docs = ['README.md', 'DESIGN.md', 'deliverable.md'];
-  const problems = [];
-  let seen = 0;
-  for (const doc of docs) {
-    for (const m of read(doc).matchAll(CITE)) {
-      const cited = m[1].replace(/^\.\//, '');
-      const from = Number(m[2]);
-      const to = m[3] ? Number(m[3]) : from;
-      seen += 1;
-      let target = tree.includes(cited) ? cited : null;
-      if (!target) {
-        const base = cited.split('/').pop();
-        const hits = tree.filter((f) => f.split('/').pop() === base);
-        if (hits.length !== 1) {
-          problems.push(`${doc}: \`${cited}:${m[2]}\` matches ${hits.length} files in the repo`);
-          continue;
-        }
-        target = hits[0];
-      }
-      const n = read(target).split('\n').length;
-      if (from < 1 || from > to || to > n) {
-        problems.push(`${doc}: \`${m[0]}\` is outside ${target} (it has ${n} lines)`);
-      }
-    }
+// ~240 `path:NN` citations across the three docs tell the reader to go look at a specific line of a
+// specific file. Editing the cited file shifts them silently, so "the doc was true when written" and
+// "the doc still points at real lines" are different claims. Bounds alone are not enough: a citation
+// that lands inside the same file but one line sideways — on the neighbour statement instead of the one
+// being described — passes every bounds check, and that is the drift this family keeps hitting. So the
+// name written glued to the citation, inside backticks, has to really appear in the lines it points at.
+// The parser and its controls live in tools/doctest.mjs; the rows below are what this suite bites on.
+// (Imported here rather than at the top: 12 rows above this block are cited by line range in README,
+// and an import line would shift every one of them.)
+const D = await import('../tools/doctest.mjs');
+
+test('every `path:NN` citation in the docs points at a real file and stays inside it', () => {
+  // The input set is counted out of the directory, never typed: a hand-written list of docs silently
+  // shrinks the sample while the leg keeps printing "everything in range".
+  const s = D.scan();
+  eq(s.docs, readdirSync(root).filter((f) => f.endsWith('.md')),
+    'the audited doc set must be exactly the markdown files sitting at the repo root');
+  ok(s.refs >= 200, `只扫到 ${s.refs} 条引用——少于 200 就是这条腿自己没读进文档，不是文档变干净了`);
+  eq(s.outOfRange, [], `${s.outOfRange.length}/${s.refs} 条引用不在盘上、同名不唯一或漂出文件末尾`);
+});
+
+test('the name glued to a citation really appears in the lines it points at', () => {
+  const s = D.scan();
+  ok(s.anchored >= 12, `只有 ${s.anchored} 条引用带着指认——锚点这半边等于没跑`);
+  eq(s.anchorBad, [], `${s.anchorBad.length}/${s.anchored} 条带指认的引用漂到了隔壁一行`);
+});
+
+test('the readings this leg prints are the readings the docs print', () => {
+  // The docs transcribe 解析 N 条 / 认到锚点 N 条. Requiring them to equal this leg's own counts is
+  // what stops the number from rotting; deleting the number must also read red, otherwise "no claim"
+  // would pass as "no error".
+  const s = D.scan();
+  ok(s.claims.length >= 1 && s.claims.every((c) => c === s.refs),
+    `文档里「解析 N 条」写了 ${s.claims.length} 处：${s.claims.join('/') || '（一处都没写）'} · 闸数到 ${s.refs}`);
+  ok(s.anchorClaims.length >= 1 && s.anchorClaims.every((c) => c === s.anchored),
+    `文档里「认到锚点 N 条」写了 ${s.anchorClaims.length} 处：${s.anchorClaims.join('/') || '（一处都没写）'} · 闸数到 ${s.anchored}`);
+});
+
+test('seven fabricated citations are all caught, each by its own failure mode', () => {
+  const f = D.fakeCites();
+  const mode = (re) => f.list.filter((x) => re.test(x)).length;
+  eq([f.caught, mode(/文件不存在/), mode(/越界/), mode(/实测/), mode(/那几行里没有/)], [7, 1, 1, 1, 4],
+    `七把假引用（不存在 / 越界 / 行数错 / 后向锚点漂 / 前向括号漂 / 「的」漂 / 调用形式漂）交回 ${f.caught} 把`);
+});
+
+test('five real annotation shapes, a spaced command body and a true line count read green', () => {
+  // Without this the row above could be red because the parser itself broke, not because a citation was.
+  const r = D.realAnnotations();
+  eq(r.bad, [], '真引用被自己的解析器判红了');
+  ok(r.refs === 6, `正样本应当解析到 6 条引用（第 7 处是「N 行」那种等值断言，不是引用），实到 ${r.refs}`);
+});
+
+test('a `<placeholder>` body anchors on its literal prefix', () => {
+  const t = D.templatePrefix();
+  eq(t.greenBad, [], '前缀对得上的模板 body 被自己的锚点判红了');
+  eq(t.redBad.length, 1, `前缀对不上的模板 body 必须红，红在 ${t.redBad.join(' | ') || '（一处都没红）'}`);
+});
+
+test('a punctuation gap is not an assertion', () => {
+  // The name before `，` is just the previous list item; pinning on it reads a correct document red.
+  const c = D.commaControl();
+  eq(c.bad, [], '逗号那种写法被判红了：' + c.bad.join(' | '));
+  ok(c.refs === 1, `应当只解析到 1 条引用，实到 ${c.refs}`);
+});
+
+test('moving a real in-range citation one line sideways turns this leg red', () => {
+  // The needle is chosen from the docs and mutated in memory only — the files on disk are untouched.
+  // If no citation in the docs bites when shifted, the anchor half is decoration, not a gate.
+  const n = D.poisonNeedle();
+  ok(n.picked, `文档里 ${n.anchored} 条带指认的引用，没有一条挪歪一格会红——锚点这半边是摆设`);
+  if (n.picked) {
+    ok(n.picked.bad.length >= 1 && n.picked.bad[0].includes(n.picked.anchor),
+      `毒针 ${n.picked.label} → ${n.picked.shifted} 没有点到 ${n.picked.anchor}：${n.picked.bad.join(' | ') || '没红'}`);
   }
-  ok(seen >= 200, `only ${seen} citations scanned across ${docs.join(' ')} — the scanner stopped reaching the docs`);
-  ok(problems.length === 0, `${problems.length} of ${seen} citations are unreachable or out of range:\n         ${problems.join('\n         ')}`);
 });
 
 run();
