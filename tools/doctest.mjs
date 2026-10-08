@@ -42,7 +42,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP_DIRS = new Set(['.git', 'node_modules', '_scratch', '_site', '_tmp']);
 
-const PATH_SRC = '[\\w./@-]+?\\.(?:js|mjs|cjs|sh|json|yml|html|css|md|py|webmanifest)';
+const PATH_SRC = '[\\w./@-]+?\\.[A-Za-z][A-Za-z0-9]{0,11}'; // 后缀不许写死：写死成某一族的语言时，本腿在那种仓里是哑的，而「0 条引用」读起来和「全核过」一模一样
 const CITE = new RegExp('^(' + PATH_SRC + '):([0-9]+(?:[,-][0-9]+)*)$');
 // An anchor may be a member path (`view.cellCenter`) but never a file path: a body with `/` in it is
 // another citation, and searching for it as a string in the cited lines only invents a false red.
