@@ -62,6 +62,12 @@ export function createView(canvas, { onAction, onPick } = {}) {
   let flash = null; // { kind, left } — a refusal or a landed deal, counted down in seconds
   let hintAt = null; // { i, j, left }
   let raf = 0;
+  // ---- 减弱动效（prefers-reduced-motion）----
+  // 被指出的那张牌的描边环按 t = (now % 900) / 900 变粗变淡，是纯装饰。
+  // 减弱动效下把 t 钉在 0.5：环照画、牌照指，只停相位。
+  let reduceMotion = false;
+  const ringPhase = () => (reduceMotion ? 0.5 : (performance.now() % 900) / 900);
+
   let last = 0;
   let animClock = 0;   // 虚拟秒：只有它前进，画面才动；暂停时冻住
   let hintLeft = 0;
@@ -508,6 +514,16 @@ export function createView(canvas, { onAction, onPick } = {}) {
       last = 0;
       measure();
     },
+    // The gate the runtime pref flip lands on: idempotent, and repaints so a player who
+    // toggles the OS switch sees the ring settle on the same frame, not at the next hint.
+    setReduceMotion(v) {
+      const on = !!v;
+      if (on === reduceMotion) return reduceMotion;
+      reduceMotion = on;
+      if (reduceMotion) draw();
+      return reduceMotion;
+    },
+    isReducedMotion: () => reduceMotion,
     measure,
     redraw: draw,
     geometry() { return geom ? { slot: geom.slot, cardW: geom.cardW, cardH: geom.cardH, step: geom.step, ox: geom.ox, oy: geom.oy, W: geom.W, H: geom.H, count: geom.count, columns: geom.columns, rows: geom.rows.length } : null; },

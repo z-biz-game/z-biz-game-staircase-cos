@@ -1,9 +1,7 @@
-// The repo itself as a gate: zero dependencies, the shipped images being real images the
-import { spawnSync } from 'node:child_process';
-// generator can reproduce, the three layers not bleeding into each other, the CI file set
-// matching `npm run check`, and the two places the display name is written agreeing.
-// Every row here is a claim someone could otherwise make in a README without anything
-// checking it.
+// The repo itself as a gate: zero dependencies, no binary assets, the three layers not bleeding
+// into each other, CI's syntax step being the one `npm run check` whose globs reach every source
+// file, and the two places the display name is written agreeing. Every row here is a claim someone
+// could otherwise make in a README without anything checking it.
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { dirname, join, extname } from 'node:path';
@@ -234,29 +232,36 @@ test('the view never decides legality and the shell never draws', () => {
   ok(/window\.stair = window\.staircase =/.test(main), 'the test hook is attached in the shell');
 });
 
-test('the CI syntax step covers exactly the file set `npm run check` covers', () => {
+test('the CI syntax step IS `npm run check`, and that leg reaches every source file', () => {
   const ci = read('.github/workflows/ci.yml');
   const pkg = JSON.parse(read('package.json'));
-  const globOf = (s) => [...s.matchAll(/[\w./]*\*\.[\w]+/g)].map((x) => x[0]).sort();
-  eq(globOf(ci.match(/- name: Syntax\n\s+run: (.+)/)[1]), globOf(pkg.scripts.check),
-    'CI and npm run check must disagree about nothing');
+  // 这道闸以前比的是「CI 手抄的那份通配 == package.json 里那份通配」，比的是两份抄本别漂。
+  // 现在 CI 只有 `run: npm run check` 一行，没有第二份抄本可比了——所以断言换成两件仍然
+  // 会坏的事：① CI 那一步必须真的是调用那条 leg（谁把手抄加回来就红），② 那条 leg 自己的
+  // 通配必须盖住树上每一个源码文件（漏掉一个目录=那个目录从此没人检语法），而且每条通配
+  // 都必须真的扫到东西（指向已删目录的死通配不会让任何一道闸红，除非在这里数一遍）。
+  ok(/- name: Syntax\n\s+run: npm run check/.test(ci),
+    'CI 的 Syntax 步骤必须是 `npm run check` 本身，不是它的手抄副本');
+  const patterns = pkg.scripts.check.match(/for f in ([^;]+);/)[1].trim().split(/\s+/);
+  const toRe = (p) => new RegExp('^' + p.replace(/[.+]/g, '\\$&').replace(/\*/g, '[^/]*') + '$');
+  const sources = FILES.filter((f) => /\.(js|mjs|cjs)$/.test(f));
+  const uncovered = sources.filter((f) => !patterns.some((p) => toRe(p).test(f)));
+  const dead = patterns.filter((p) => !sources.some((f) => toRe(p).test(f)));
+  eq(uncovered, [], `npm run check 的通配漏掉的源码文件（树上一共 ${sources.length} 个）`);
+  eq(dead, [], `npm run check 里一条文件都扫不到的死通配（通配共 ${patterns.length} 条）`);
+  ok(sources.length >= 20 && patterns.length >= 5,
+    `防空转：树上 ${sources.length} 个源码文件、leg ${patterns.length} 条通配，两个数都太小就是扫描自己坏了`);
   ok(/SKIP_UNIT: 1/.test(ci), 'the browser job must not re-run the node suites');
-  ok(ci.includes('node "$f"'), 'CI runs each test file, so a failing row fails the job');
+  ok(/- name: Suites\n\s+run: npm run unit/.test(ci) && /\bnode "\$f"/.test(pkg.scripts.unit || '') && /exit 1/.test(pkg.scripts.unit || ''), 'CI 调 `npm run unit`，而那条 leg 自己逐个 node 每个测试文件、任一非零立即退（把手抄 loop 加回 CI 不会让它更真）');
 });
 
 test('pages.yml copies exactly what the page can reach, and nothing else', () => {
   const pages = read('.github/workflows/pages.yml');
-  const build = pages.split('Assemble static site')[1].split('uses: actions/configure-pages')[0];
-  ok(/cp index.html manifest\.webmanifest sw\.js _site\//.test(build), 'the install trio must be published');
-  ok(/cp -r css js icons _site\//.test(build), 'css, js and icons must be published');
-  ok(/cp -r assets\/art _site\/assets\//.test(build), 'the texture layer must be published');
+  const list = read('tools/assemble-site.sh').split('\n').filter((l) => /^\s*(cp |for d in )/.test(l)).join('\n');
+  ok(/run: bash tools\/assemble-site\.sh _site/.test(pages), 'workflow 只调那一份清单，不再手抄 cp 行');
+  ok(/cp index\.html manifest\.webmanifest sw\.js/.test(list) && /cp -r css js/.test(list), '清单里就是 index.html + manifest + sw + css/ js');
+  ok(!/tools\/|test\/|server\.cjs|electron/.test(list), 'the list must not carry tools/, tests or the server into the artifact');
   ok(!/path: \.\s*$/m.test(pages), 'never publish the whole repo as the site');
-  ok(!/tools|test\/|server\.cjs|electron|assets\/gen/.test(build),
-    'the build step must not carry tools/, tests, the server or the generator into the artifact');
-  // Every path the copy names has to exist, or CI fails at `cp` instead of here.
-  for (const p of ['index.html', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'icons', 'assets/art']) {
-    ok(existsSync(join(root, p)), `pages.yml copies ${p}, which is not in the repo`);
-  }
 });
 
 test('this repo owns its own ports and says so', () => {
@@ -304,6 +309,88 @@ test('the shipped data file is generated, and says who generated it', () => {
     const obj = JSON.parse(r.trim().replace(/,$/, ''));
     ok(obj.spec && obj.spec.start && obj.spec.target, `${obj.id}: a lot without a serialised spec cannot be re-solved`);
     ok(typeof obj.par === 'number' && typeof obj.steps === 'number', `${obj.id}: missing measured numbers`);
+  }
+});
+
+// ~240 `path:NN` citations across the three docs tell the reader to go look at a specific line of a
+// specific file. Editing the cited file shifts them silently, so "the doc was true when written" and
+// "the doc still points at real lines" are different claims. Bounds alone are not enough: a citation
+// that lands inside the same file but one line sideways — on the neighbour statement instead of the one
+// being described — passes every bounds check, and that is the drift this family keeps hitting. So the
+// name written glued to the citation, inside backticks, has to really appear in the lines it points at.
+// The parser and its controls live in tools/doctest.mjs; the rows below are what this suite bites on.
+// (Imported here rather than at the top: 12 rows above this block are cited by line range in README,
+// and an import line would shift every one of them.)
+const D = await import('../tools/doctest.mjs');
+
+test('every `path:NN` citation in the docs points at a real file and stays inside it', () => {
+  // The input set is counted out of the directory, never typed: a hand-written list of docs silently
+  // shrinks the sample while the leg keeps printing "everything in range".
+  const s = D.scan();
+  eq(s.docs, readdirSync(root).filter((f) => f.endsWith('.md')),
+    'the audited doc set must be exactly the markdown files sitting at the repo root');
+  ok(s.refs >= 200, `只扫到 ${s.refs} 条引用——少于 200 就是这条腿自己没读进文档，不是文档变干净了`);
+  eq(s.outOfRange, [], `${s.outOfRange.length}/${s.refs} 条引用不在盘上、同名不唯一或漂出文件末尾`);
+});
+
+test('the name glued to a citation really appears in the lines it points at', () => {
+  const s = D.scan();
+  ok(s.anchored >= 12, `只有 ${s.anchored} 条引用带着指认——锚点这半边等于没跑`);
+  eq(s.anchorBad, [], `${s.anchorBad.length}/${s.anchored} 条带指认的引用漂到了隔壁一行`);
+});
+
+test('the readings this leg prints are the readings the docs print', () => {
+  // The docs transcribe 解析 N 条 / 认到锚点 N 条. Requiring them to equal this leg's own counts is
+  // what stops the number from rotting; deleting the number must also read red, otherwise "no claim"
+  // would pass as "no error".
+  const s = D.scan();
+  ok(s.claims.length >= 1 && s.claims.every((c) => c === s.refs),
+    `文档里「解析 N 条」写了 ${s.claims.length} 处：${s.claims.join('/') || '（一处都没写）'} · 闸数到 ${s.refs}`);
+  ok(s.anchorClaims.length >= 1 && s.anchorClaims.every((c) => c === s.anchored),
+    `文档里「认到锚点 N 条」写了 ${s.anchorClaims.length} 处：${s.anchorClaims.join('/') || '（一处都没写）'} · 闸数到 ${s.anchored}`);
+});
+
+test('nine fabricated citations are all caught, each by its own failure mode', () => {
+  const f = D.fakeCites();
+  const mode = (re) => f.list.filter((x) => re.test(x)).length;
+  // The last slot of the pinned array is "the blank line really was found" — if someone fills that gap,
+  // blankAt goes to 0 and the fabricated set drops to eight, so this row reddens instead of quietly
+  // losing a knife. The slot before it counts the whole-word knife on its own: `ACTION\b` can only hit
+  // the prefix cite (the `ACTION_KINDS` rows are followed by `_`), so a matcher that slides back to
+  // `.includes` shows up as 9→8 and 1→0 rather than as a row that still says "all caught".
+  eq([f.caught, mode(/文件不存在/), mode(/越界/), mode(/实测/), mode(/那几行里没有/), mode(/整段是空行/), mode(/里没有 ACTION\b/), f.blankAt > 0],
+    [9, 1, 1, 1, 5, 1, 1, true],
+    `九把假引用（不存在 / 越界 / 行数错 / 后向锚点漂 / 前向括号漂 / 「的」漂 / 调用形式漂 / 无锚点落在空行第 ${f.blankAt} 行 / 前缀不算整词）交回 ${f.caught} 把`);
+});
+
+test('five real annotation shapes, a spaced command body and a true line count read green', () => {
+  // Without this the row above could be red because the parser itself broke, not because a citation was.
+  const r = D.realAnnotations();
+  eq(r.bad, [], '真引用被自己的解析器判红了');
+  ok(r.refs === 6, `正样本应当解析到 6 条引用（第 7 处是「N 行」那种等值断言，不是引用），实到 ${r.refs}`);
+});
+
+test('a `<placeholder>` body anchors on its literal prefix', () => {
+  const t = D.templatePrefix();
+  eq(t.greenBad, [], '前缀对得上的模板 body 被自己的锚点判红了');
+  eq(t.redBad.length, 1, `前缀对不上的模板 body 必须红，红在 ${t.redBad.join(' | ') || '（一处都没红）'}`);
+});
+
+test('a punctuation gap is not an assertion', () => {
+  // The name before `，` is just the previous list item; pinning on it reads a correct document red.
+  const c = D.commaControl();
+  eq(c.bad, [], '逗号那种写法被判红了：' + c.bad.join(' | '));
+  ok(c.refs === 1, `应当只解析到 1 条引用，实到 ${c.refs}`);
+});
+
+test('moving a real in-range citation one line sideways turns this leg red', () => {
+  // The needle is chosen from the docs and mutated in memory only — the files on disk are untouched.
+  // If no citation in the docs bites when shifted, the anchor half is decoration, not a gate.
+  const n = D.poisonNeedle();
+  ok(n.picked, `文档里 ${n.anchored} 条带指认的引用，没有一条挪歪一格会红——锚点这半边是摆设`);
+  if (n.picked) {
+    ok(n.picked.bad.length >= 1 && n.picked.bad[0].includes(n.picked.anchor),
+      `毒针 ${n.picked.label} → ${n.picked.shifted} 没有点到 ${n.picked.anchor}：${n.picked.bad.join(' | ') || '没红'}`);
   }
 });
 

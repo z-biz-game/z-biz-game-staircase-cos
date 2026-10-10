@@ -1,53 +1,56 @@
-// Offline shell for the PWA install. The policy is network-first on purpose: this game's
-// "最少" is computed on the device, so serving a stale bundle is worse than serving nothing.
-// Successful same-origin GETs are recorded as they pass, which is what makes a second visit
-// work with no network at all.
+'use strict';
+// 离线可用 + 永不被旧缓存钉住。
 //
-// Registered from js/pwa.js, which refuses file:// — a Service Worker cannot exist there, and
-// swallowing that error here would just hide it.
+// 两条实测换来的口径：
+//   1) 一律 **网络优先**，命中网络才回填缓存。手工 VERSION + cache-first 的组合，
+//      发出去的 HTML 会配上上一版的 js/css，出一个"新界面配旧逻辑"的鬼状态，
+//      而且玩家自己无法恢复（只能等缓存过期）。
+//   2) 缓存名带版本号（activate 时清掉非本版的名字）。改版**不需要**同步 bump：
+//      同名文件重绘之后，网络优先这一条保证客户端下一次联网就拿到新字节。
+const VERSION = 'staircase-cos-v1';
+const CACHE = `${VERSION}-shell`;
+const PRECACHE = ['index.html', 'manifest.webmanifest'];
 
-const VERSION = 'staircase-v1';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './css/game.css', './js/main.js'];
-
-self.addEventListener('install', () => {
-  self.skipWaiting();
+self.addEventListener('install', (ev) => {
+  // 首屏两件套先抓下来：断网时至少能打开界面，而不是浏览器的错误页。
+  ev.waitUntil(
+    caches.open(CACHE).then((c) => c.addAll(PRECACHE).catch(() => {})).then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
-    // Old versions of the cache go away on activation, so an upgrade never leaves two.
-    const stale = (await caches.keys()).filter((name) => name !== VERSION);
-    await Promise.all(stale.map((name) => caches.delete(name)));
-    const cache = await caches.open(VERSION);
-    await Promise.all(SHELL.map((src) => cache.add(new Request(src, { cache: 'reload' })).catch(() => null)));
-    await self.clients.claim();
-  })());
+self.addEventListener('activate', (ev) => {
+  ev.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
 
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
+self.addEventListener('fetch', (ev) => {
+  const req = ev.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;   // 第三方（本仓一个都没有）不归我管
-  event.respondWith(networkFirst(req));
-});
+  if (url.origin !== self.location.origin) return;
 
-async function networkFirst(req) {
-  const cache = await caches.open(VERSION);
-  try {
-    const res = await fetch(req);
-    if (res && res.ok && res.type === 'basic') cache.put(req, res.clone());
-    return res;
-  } catch (err) {
-    const hit = await cache.match(req);
-    if (hit) return hit;
-    if (req.mode === 'navigate') {
-      const shell = await cache.match('./index.html');
-      if (shell) return shell;
-    }
-    return new Response('offline: 这个资源没在本地缓存过', {
-      status: 503,
-      headers: { 'content-type': 'text/plain; charset=utf-8' },
-    });
-  }
-}
+  ev.respondWith(
+    fetch(req)
+      .then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      })
+      .catch(async () => {
+        const hit = await caches.match(req);
+        if (hit) return hit;
+        // 导航请求（地址栏/刷新/桌面图标）离线时回落到缓存的那份壳，不白屏。
+        if (req.mode === 'navigate') {
+          const shell = await caches.match('index.html');
+          if (shell) return shell;
+        }
+        return Response.error();
+      })
+  );
+});

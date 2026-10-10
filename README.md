@@ -60,7 +60,7 @@
 | `par` 是"没有更短"的证明，不是搜索器自己给自己打分 | `npm test`（`test/solve.test.mjs`）+ `node tools/bake.mjs` | `T_k` 最难的开局正好要 `k` 步、且 `unreachable === 0`，五档全查（`test/solve.test.mjs:99-109`）；`distanceMap` 反向 BFS 的读数必须逐个等于单点 `solve()` 的读数，10 张牌 42 个开局全比（`test/solve.test.mjs:111-121`）；`parProof` 要求分层 / 正向 / 反向三条路同数且边表闭合（`test/solve.test.mjs:129-138`，实现 `js/core/solve.js:159-185`）；`buildGraph` 对 15 张牌必须闭合且恰好覆盖 p(15)=176 个局面（`test/solve.test.mjs:140-150`）；超限的搜索必须报 `capped` 而不是猜一个数（`test/solve.test.mjs:152-156`）；bake 侧是 `tools/bake.mjs:122,123,134` | 本轮 `rows: 17 fail: 0`；bake 本轮打印 5 行 `proof par-map …` + 7 行三路对账 |
 | 出题器不许把玩家骗进"数不对的题"：拒绝要说理由，接受要能回放 | `npm test`（`test/make.test.mjs`） | `rateLot` 的五条出口逐个点名（`js/core/make.js:39-49`；断言 `test/make.test.mjs:77-85`，其中 `[6,2,1]`→`par 3 不在带内`、`[1×6]`→`开局即目标`）；生成盘必须 `2 ≤ par ≤ steps`、`path.length === par`、attractor 前缀与 `k` 一致（`test/make.test.mjs:87-102`，四档各 25 颗 seed）；`partitionsOf` 的枚举顺序是生成器契约，写死三条（`test/make.test.mjs:152-156`） | 本轮 `rows: 13 fail: 0` |
 | 同一颗 seed = 同一副牌；每日题在任何设备上是同一副 | `npm test`（`test/make.test.mjs`） | `hashSeed('a') === 723832900` 且必须**不等于**公开 FNV-1a 的 `3826002220`（`test/make.test.mjs:16-27`，实现 `js/core/rng.js:4-13`）；同一 seed 连跑两次逐字段相同、不同 seed 不许撞（`test/make.test.mjs:104-115`）；`dailyLot('2026-09-27')` 两次同盘、次日必须是另一副、而且本机 `targetOf` 重算必须与盘上数字一致（`test/make.test.mjs:125-138`）；`#/random` 四条档位分别同 token 同盘（`test/make.test.mjs:140-150`） | 本轮 `rows: 13 fail: 0`（与上一条共用套件）；本轮另跑 3 次 `makeLotTrying('frozen-seed','twined')`，三次逐字相同：`frozen-seed|4|10,1,1,1,1,1|4` |
-| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 与本地文件集不许漂、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 的 Syntax 步骤 glob 集合必须与 `npm run check` 完全一致（`test/repo.test.mjs:83-91`）；`pages.yml` 只许 `cp index.html` + `cp -r css js`（`test/repo.test.mjs:93-100`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:102-116`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:118-126`） | 本轮 `rows: 11 fail: 0` |
+| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 不许自己抄一份 glob 而 leg 的通配不许漏文件、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 那一步必须就是 `npm run check` 本身（把手抄的 glob 加回来就红），而那条 leg 自己的通配既不许漏掉树上任何一个 `.js/.mjs/.cjs`，也不许留下一条扫不到任何文件的死通配（`test/repo.test.mjs:83-105`）；`pages.yml` 只许调 `tools/assemble-site.sh` 那一份清单，清单里是 `index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`（`test/repo.test.mjs:107-114`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:116-130`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:132-140`）；三份文档里每一条 `path:NN` 引用都必须落到仓内一个真实文件的行范围内，引用不存在、同名不唯一或漂出文件末尾都红；**贴着引用写在反引号里的那个名字还必须真的出现在被指的那几行里**（八行判据 `test/repo.test.mjs:174-243`，解析器是 `tools/doctest.mjs:144` 的 `audit`；地板 `refs >= 200` 与「文档印的条数 == 闸数到的条数」都由这条腿自己守，所以"文档确实被扫穿了"不靠本文报数） | 本轮 `rows: 19 fail: 0` |
 
 ## 三、怎么跑：`package.json` 的 8 条脚本逐条核对
 
@@ -87,19 +87,57 @@
 > for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" || exit 1; done && echo OK
 OK
 rows: 16 fail: 0     rows: 12 fail: 0     rows: 12 fail: 0     rows: 13 fail: 0
-rows: 14 fail: 0     rows: 11 fail: 0     rows: 17 fail: 0     rows:  8 fail: 0
+rows: 14 fail: 0     rows: 19 fail: 0     rows: 17 fail: 0     rows:  8 fail: 0
 ```
 
-八行合计 **103 条断言 / 0 失败**，语法门扫到 **24 个文件**（本轮把这 24 个文件名逐个列出来数过：
+八行合计 **111 条断言 / 0 失败**，语法门扫到 **27 个文件**（本轮把这 27 个文件名逐个列出来数过：
 `js/main.js`、`js/view.js`、`js/core/` 八个、`js/data/lots.js`、`server.cjs`、`electron/main.cjs`、
-`tools/` 三个 `.mjs`、`test/` 八个 `.mjs`）。
+`tools/` 六个 `.mjs`、`test/` 八个 `.mjs`）。
 `node --test test/` 也跑过，原样结尾：`ℹ tests 8`、`ℹ suites 0`、`ℹ pass 8`、`ℹ fail 0`、
 `ℹ duration_ms 216.620583`。这套 `node --test` 之所以能用，是因为每个套件末尾自己调
 `run()` 收尾（`tools/harness.mjs:36-41`），而不是靠测试运行器发现用例。
 
 `tools/` 里没有 `check.mjs`、没有 `balance.mjs`、没有 `golden*`、没有 `counter-test`：
-`tools/` 一共四个文件（`bake.mjs` 179 行、`harness.mjs` 41 行、`playtest.mjs` 597 行、
-`verify.sh` 131 行）。别处如果写"七套 suite"或"平衡闸"，在这个仓都没有对应物。
+`tools/` 一共八个文件，每个的行数由上面那条文档腿按等式收（写歪一格就红）——
+`assemble-site.sh`（31 行）、`bake.mjs`（179 行）、`deploy-set.mjs`（400 行）、
+`deploy-set-selftest.mjs`（363 行）、`harness.mjs`（41 行）、`playtest.mjs`（597 行）、
+`verify.sh`（136 行）、`doctest.mjs`（273 行）。别处如果写"七套 suite"或"平衡闸"，在这个仓都没有对应物。
+
+**文档行号对账**（`node tools/doctest.mjs` 单独复跑；判据是 `test/repo.test.mjs` 最后八行，`test/repo.test.mjs:174-243`）：
+本文、DESIGN 与 deliverable 里每个数字后面都挂着 `文件:行号`，那句"行号指本仓代码"以前只有一条**界内**检查在守——
+文件在不在仓里、行号超没超过文件长度。本轮把它升到与 ferry / tatamibari / echo-location / creek / lightsout /
+yajilin 同一份规则：贴着引用写在反引号里的那个名字，必须真的出现在被指的那几行里。五种贴法都认——
+`name`（`path:NN`）、`path:NN`（`name`）、`path:NN` 的 `name`、`path:NN`（`fn(a, b)`）、
+`path:NN`（`dir/file.js::symbol`）；折名字的规则在 `tools/doctest.mjs:51`（`tokOf`），
+引用与指认怎么配对的在 `tools/doctest.mjs:98`（`parseRefs`）。为什么光查越界不够：一条引用漂到**隔壁那一行**
+（同一个文件、还在界内）时，界内检查一条都不会红，而这正是这一族反复撞到的漂移。
+本轮这条腿解析 248 条、认到锚点 32 条，全部在盘上、全部落回原处、没有一条整段落在空行上。
+"在界内"不等于"指到了代码"：一条不带名字的引用即使落在 1 与文件行数之间，也可能只是指到了一段行距，
+界内与锚点两道查都看不见它——所以界内检查之后还有一道，被指的区间 join 完 trim 为空就红。
+审计的文档清单由 `readdirSync` 现数（`tools/doctest.mjs:180`（`scan`）），不是手抄的三份名单——
+手抄的名单会让这条腿自己缩样，而它照样打印"全部在范围内"。
+控制一把不落：九把假引用逐把点名（不存在 / 越界 / 行数错 / 后向锚点漂 / 前向括号漂 / 「的」漂 / 调用形式漂 /
+无锚点落在空行 / 前缀不算整词——第八把指的那个行号是跑的时候现量的，写死它等于在那一天有人把空行填上之后这条断言悄悄地不再测任何东西，
+`tools/doctest.mjs:206`（`fakeCites`））；五种真注解加带空格的命令行 body（`npm test` 那种按首词钉就是一次假红）
+在同一解析器下必须判绿；模板 body `NAME:<占位>` 取字面量前缀，一绿一红；纯标点（`，`）隔开的那个名字
+不构成指认，必须判绿；最后一把毒针只在内存里把一条界内的真引用挪歪一格，红的就是锚点那半边
+（`tools/doctest.mjs:249`（`poisonNeedle`），盘上的文档一个字不动）。
+文档里印的「解析 248 条」与「认到锚点 32 条」由这条腿自己对账：抄错一格就红，两处数字全删掉也红
+（只删一处不算——另一处还在对账，本轮在 `_scratch` 的副本树上试过：129→130 那一格、248→247 那一格、
+以及把两处都抹掉，三把各退 1，盘上的仓库一个字没动）。
+空行那一道也在副本上验过牙：把一条界内的真引用改成指向 `js/core/solve.js` 的第一处空行，这条腿为它红、
+红行点名「那几行整段是空行」，复原后回绿（读数与判词在 `_tmp-staircase-blank-teeth.log`，`TEETH_OK`）；
+本轮三份文档里没有一条引用整段落在空行上，所以这道加严没有修掉一处漂，它堵的是"以后也没人看得见"。
+锚点认的是**整词**不是子串：`ACTION` 坐在声明 `ACTION_KINDS` 的那一行上不算命中，两侧再是字母、数字、`_`、`$`
+就不算这个标识符本身。子串口径比它替掉的那份手写清单更弱（一个短名字会"出现在"任何碰巧含它的标识符里），
+会把一次真的漂读成绿。第九把刀写的正是这种前缀，`test/repo.test.mjs` 那行钉的数组为它单开一格：这条腿哪天退回
+子串，同一行先是总数 9→8、再是那格 1→0，红在"少了一把"而不是"全部抓到"。
+换口径这一轮，三份文档里已有的带指认引用没有一条因此变红：红的全是这条腿自己插了行、文档挂着的行号漂到隔壁，
+已按真实行号逐条 grep 改回（不是放宽口径糊过去），所以这道同样是加严而不是修一处已存在的漂。
+牙也在同名副本上跑过两双腿（读数与判词在 `_tmp-staircase-word-teeth.log`，`TEETH_OK`）：A 腿把这条腿的锚点检查
+改回子串，八套 node 断言里只有"九把假引用"那一行红，而它自己那行交回的读数写成 8 把——红的是"少了一把"；
+B 腿把本文上面那条 `audit` 引用的名字截成 `aud`，锚点那一行为它红、红行点名「那几行里没有 aud」，
+改回原文两双腿都回全绿（副本基线 19 行 0 失败，与盘上同一份读数）。
 
 ## 四、门禁清单：每套判什么、本轮交回几条
 
@@ -114,7 +152,7 @@ rows: 14 fail: 0     rows: 11 fail: 0     rows: 17 fail: 0     rows:  8 fail: 0
 | `test/library.test.mjs` | 出厂表自证：`spec` 重解、`steps` 重模拟、`par ≤ steps` 且至少九成严格更短、`steps/par` 最大比值 ≥ 5、三角关必须指向阶梯而非三角关必须是 `orbit(a,b)` 形状、`path.length === par`、`TIERS_META` 必须是被量出来的不是抄上去的、`master` 档真的带着 12 与 18 两种反例 | 12 | 12 |
 | `test/make.test.mjs` | rng 与出题：`hashSeed` 自洽且不冒充公开向量、日期不撞、`mulberry32` 可复现、四档 `TIERS` 的 ns 列表被钉死、`rateLot` 五个拒绝理由、生成盘 100 颗 seed 的不变式、seed→盘 幂等、`makeLotTrying` 的 40 次上限、枚举顺序契约 | 13 | 13 |
 | `test/partition.test.mjs` | 状态代数与"有多少个状态"：三角数/阶梯判定、`key()` 规范化、`isPartitionOf` 的六种拒绝、p(0..15/18/20/21/28) 与公开表对账（枚举与递推两条路各一遍）、字典序与 `minPartition` | 14 | 14 |
-| `test/repo.test.mjs` | 见上一节最后一行 | 11 | 11 |
+| `test/repo.test.mjs` | 见上一节最后一行 | 19 | 19 |
 | `test/solve.test.mjs` | 三动作的合法性与文案、`neighbors` 的保牌与规范化、把手算 fixture（`[6]`→par 2、六张单牌→par 3、`[2,2,1,1]`→par 1 而只发牌要 6）、`T_k` 最难开局 = `k`、42 个开局逐一等于 `distanceMap`、12 张牌最难开局 par 5、三路对账、`buildGraph` 闭合、超限报 `capped`、`replay` 走同一闸门 | 17 | 17 |
 | `test/storage.test.mjs` | 存档：没有 `window.localStorage` 就**抛**、后端必须真有三件套、`best` 只降不升 / `plays` 只升 / `perfect` 一旦成立不再掉、`unlock` 单调、每日打卡按日期分账、`solves/ops/deals/hints/perfect` 分开记账、清档真的删 key、坏 JSON 与坏形状都从空白开始而不是崩 | 8 | 8 |
 
@@ -138,13 +176,13 @@ max BFS states 1692 · slowest par-proof 196ms · total 0.5s
 （`diff` 忽略 `BAKED_AT` 那一行为空；仓里那份 11,097 B，`deliverable.md:194` 记的线上抓到的也是 11,097 B）。
 这条不要读成"重烤永远得到同一批盘"——bake 会静默重写文件，CI 也不跑它，能钉住出厂数据的只有
 `test/library.test.mjs` 那一套，而且它对关卡数只有 `≥ 24` 的地板（`test/library.test.mjs:15`、
-`test/repo.test.mjs:142`），本轮实测是 27。
+`test/repo.test.mjs:156`），本轮实测是 27。
 
 浏览器层五段（`bash tools/verify.sh`，**本轮未跑**）：`verify.sh:99` 的默认清单是
 `boot play routes save pointer`，每段交回 `rows/fail` 两个数（`verify.sh:101-122`），
 判据本体全在 `tools/playtest.mjs` 的 `SCENARIOS`（`tools/playtest.mjs:360-592`）与
 `pointerScenario()`（`tools/playtest.mjs:171-357`）。**源码里没有钉"每段该交回几条"的期望值**，
-`fail` 为空就 `exit 0`（`verify.sh:121`、`verify.sh:130-131`），所以本仓**没有**
+`fail` 为空就 `exit 0`（`verify.sh:121`、`verify.sh:135-136`），所以本仓**没有**
 "少一条断言就红"这类地板。能给的只有静态计数（`rec()` 调用点，`tools/playtest.mjs`）：
 
 | 段 | 判什么 | 必然执行的 `rec()` 数 |
@@ -183,7 +221,9 @@ server.cjs            70 行 / 2,326 B    零依赖静态服务（CommonJS，Ele
 tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘前的 12 处 throw + 打印那 18 行 proof
 tools/harness.mjs     41 行 / 1,251 B    node 与浏览器同形状的断言行，rows/fail 两列
 tools/playtest.mjs   597 行 / 31,169 B   裸 CDP 驱动（node 全局 fetch/WebSocket）+ 五段判据
-tools/verify.sh      131 行 / 5,188 B    生命周期：起 Chrome 与服务、预检、聚合、cleanup
+tools/deploy-set.mjs 400 行 / 23,283 B  产物闸：按 pages.yml 那份清单真拷一遍产物，要求页面会去要的每个 URL 都在产物里，并要求 head 自己的标签形状闭合（W/R/P/H 四族）
+tools/deploy-set-selftest.mjs 363 行 / 21,974 B  上面那道闸自己的台架：每一类断言当场打红一次，外加阴性对照
+tools/verify.sh      136 行 / 5,535 B    生命周期：起 Chrome 与服务、预检、聚合、cleanup，收尾跑部署集双闸
 test/*.test.mjs      8 个文件（deal 170 / game 158 / library 150 / make 158 / partition 112 / repo 150 / solve 170 / storage 99 行）
 electron/main.cjs     36 行              桌面壳：startServer({port: 0}) 起临时端口再 loadURL
 .github/workflows/ci.yml     50 行       unit job（Syntax + Suites）与 browser job（SKIP_UNIT=1、WD_TIMEOUT=240）
@@ -193,7 +233,7 @@ DESIGN.md 135 行 / README.md（本文件）/ deliverable.md 209 行 / LICENSE /
 
 出货产物是 **13 个文件**：`index.html` + `css/game.css` + `js/` 下 11 个 `.js`（本轮
 `find js -name '*.js' | wc -l` 实测 11）。名单由 `pages.yml:29-31` 那三行决定，
-`test/repo.test.mjs:93-100` 不许它把 `tools/`、`test/`、`server.cjs`、`electron/` 带进产物，
+`test/repo.test.mjs:107-114` 不许它把 `tools/`、`test/`、`server.cjs`、`electron/` 带进产物，
 也不许写 `path: .`。
 
 ## 六、难度是怎么量出来的
@@ -255,7 +295,7 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 
 ## 七、端口与 URL 形态
 
-本仓拥有的两个号写死在源码里，也被 `test/repo.test.mjs:102-116` 按字面正则钉住：
+本仓拥有的两个号写死在源码里，也被 `test/repo.test.mjs:116-130` 按字面正则钉住：
 **web 5212**（`tools/verify.sh:22`、`server.cjs:60` 的默认值、`package.json:9` 的 `dev`、
 `tools/playtest.mjs:16` 的默认 `BASE_URL`）、**CDP 9353**（`tools/verify.sh:21`、
 `tools/playtest.mjs:13`）。`server.cjs:60` 允许 `argv[2] || process.env.PORT || 5212`，
@@ -269,7 +309,7 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 （本轮 grep 无命中），`playtest.mjs:523` 断言的路由形态（`#/c/…`、`#/lot/…`、`#/daily`、`#/random/…`）
 全都是 hash，不是路径前缀。CI 的 browser job 原样继承这个默认（`.github/workflows/ci.yml:46-50`
 只设 `SKIP_UNIT: 1` 与 `WD_TIMEOUT: 240`），**所以 CI 覆盖的是 root 一种，不覆盖 Pages 前缀那一种**。
-`pages.yml:32-45` 把产物交给 GitHub Pages，前缀形态（`/z-biz-game-staircase-cos/…`）只有在真实部署之后
+`pages.yml:30-43` 把产物交给 GitHub Pages，前缀形态（`/z-biz-game-staircase-cos/…`）只有在真实部署之后
 才存在，而本仓的 `server.cjs:49-55` 只有一个 docroot，**没有**"把仓库挂在一段前缀下"的本地服务模式，
 所以要跑前缀形态只能 `BASE_URL=https://…/z-biz-game-staircase-cos/ bash tools/verify.sh`
 （脚本会因此不起服务、只连一次 Chrome，`tools/verify.sh:23` 的覆盖就是为这条路径留的）——
@@ -280,20 +320,20 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 （`tools/verify.sh:36-39`，`lsof -nP -iTCP -sTCP:LISTEN`）、`exit 3` DevTools 始终没在
 `:$CDP_PORT` 上绑定（`tools/verify.sh:61-66`）、`exit 4` 静态服务始终没答 `BASE`
 （`tools/verify.sh:67-72`）、`exit 5` 页面里始终没有 `window.stair.state.id`
-（`tools/verify.sh:92-97`），其余失败走 `FAILED=1` 那条汇总（`tools/verify.sh:75,130-131`）。
+（`tools/verify.sh:92-97`），其余失败走 `FAILED=1` 那条汇总（`tools/verify.sh:75,133-136`）。
 两处值得注意的不对称：预检**只查 web 口**，CDP 口 9353 不查，占了就撞上别人家的浏览器
 （`tools/verify.sh:36` 那一个 `if`，`verify.sh:8-10` 把这条留给人工 `pgrep`）；
 截图目录默认落在仓外的 `/tmp/puzzle-brief/shots`（`tools/verify.sh:24`），
 `tools/` 与 `js/` 都不含 `shots/`，所以跑过一次浏览器闸之后仓里不会多出文件。
 `verify.sh:57` 那条看门狗（默认 300 s、CI 给 240 s）会直接 `cleanup`，
 `cleanup` 里 `kill -9` 再 `wait` 两个后台 PID 并删掉 `mktemp -d` 的 profile
-（`tools/verify.sh:41-53`），这两条同样是 `test/repo.test.mjs:106-108` 按字面读的。
+（`tools/verify.sh:41-53`），这两条同样是 `test/repo.test.mjs:120-122` 按字面读的。
 
 ## 八、这个仓**不承诺**什么
 
 | 不承诺 | 为什么（本轮实测/源码点名） | 出处 |
 |---|---|---|
-| **不承诺浏览器闸是绿的，也不承诺它的断言条数** | 按指令本轮没跑 `tools/verify.sh`，所以 `=== ALL GREEN ===` 这句话我没有本轮证据；更要紧的是**源码里没有条数地板**：`verify.sh:117-121` 只打印 `rows:` 与 `fail:`，`fail` 为空就退 0，node 侧 `verify.sh:80-84` 与 `package.json:13` 都是 `test/*.test.mjs` 的 glob——把八个套件删掉三个，两道门照样全绿。本文件给的 13/13/14/12/19 与 103 都是**静态或本轮实测的读数**，不是被钉住的期望值。 | `tools/verify.sh:80-84,99,117-121`、`package.json:13`、`tools/harness.mjs:36-41` |
+| **不承诺浏览器闸的断言条数是被钉住的期望值** | 本轮两条腿都跑过：`bash tools/verify.sh` 五档 13/13/14/12/19 加 console、部署集双闸 29 条引用/4 张位图，全部 `fail: 0`，收尾 `=== ALL GREEN ===`、rc=0（这些是**那一跑的读数**，住在 `_tmp-fleet-ds-staircase-verify-full-r1.log`，不是仓里的期望值）。更要紧的是**源码里没有条数地板**：`verify.sh:117-121` 只打印 `rows:` 与 `fail:`，`fail` 为空就退 0，node 侧 `verify.sh:80-84` 与 `package.json:13` 都是 `test/*.test.mjs` 的 glob——把八个套件删掉三个，两道门照样全绿。本文件给的 13/13/14/12/19 与 104 都是**静态或本轮实测的读数**，不是被钉住的期望值。 | `tools/verify.sh:80-84,99,117-121`、`package.json:13`、`tools/harness.mjs:36-41` |
 | **不承诺站点在线，也不承诺 Pages 前缀形态可用** | CI 的 browser job 只跑 root 形态，Pages workflow 只是拷文件、不测前缀 URL，本地服务只有一个 docroot 因而没有前缀模式可跑；本轮没做任何网络核对。仓内唯一相关记录是 `deliverable.md:185-199`（主代理 2026-09-27 实抓的四个 200 与发布 sha `fd0fe15`），那是**转述**，不是本轮读数，也不是任何一道门。 | `.github/workflows/ci.yml:46-50`、`.github/workflows/pages.yml:27-35`、`server.cjs:49-55`、`deliverable.md:185-199` |
 | **不承诺界面手感与美术** | 浏览器段只认三类证据：DOM id 齐不齐（`tools/playtest.mjs:200-201`）、画布有没有真像素与被画过（`tools/playtest.mjs:209`、`368-376`）、真事件之后状态与盘面变了没有（`tools/playtest.mjs:220-245`）。类名、`aria-*`、CSS 观感、注释里的意图一概不是证据；`css/game.css:103-106` 那两条 `[hidden]` 规则之所以重要，只是因为它们决定事件会不会被盖住的卡片吃掉（`DESIGN.md:111`）。 | `tools/playtest.mjs:171-357`、`css/game.css:103-106,180`、`DESIGN.md:111` |
 | **不承诺 `par` 是"人类觉得难"，也不承诺难度梯子铺开** | `par` 是动作图上的最短操作数，仅此而已（`js/core/solve.js:97-129`）；带是过滤器不是分布承诺，本轮出厂数据里 `twined` 八关全是 4（带定义 4-5）、`master` 七关全是 5（带定义 5-7），高半边一次没被碰到。本仓也没有 `tools/balance.mjs`、没有"单调性"断言、没有 p95/预算那一套定价；跨档之间唯一的单调证据是那张 `par-map` 直方图的最大值 `3/4/5/6/7`。 | `js/core/make.js:23-27`、`js/core/solve.js:224-262`、本轮 `npm run bake` 副本读数 |
@@ -304,6 +344,77 @@ bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
 | **不承诺任何计时上界** | 计时量与结构量分家的理由写在 `DESIGN.md:81-105`，而那张计时表的来源脚本没有入库（`deliverable.md:172-174`）。本轮同一台机器重测普遍更小（daily 平均 3.9 ms vs 表内 13 ms；`slowest par-proof` 196 ms vs 表内 311–533 ms），说明这些数随负载走。所以"点击时只做有界搜索"这条是真的（`js/core/game.js:91` 的 20000 是个字面上界），"最坏 137 ms"那类话只能当某一次的读数。 | `DESIGN.md:81-105`、`js/core/game.js:88-96`、本轮观测脚本 |
 | **不承诺 `npm run electron` 能用** | 脚本在（`package.json:10`），electron 却**不是**依赖（`package.json:30-31` 两个 `{}`），`electron/main.cjs:1-4` 自己写明了这一点；本轮没跑过它。受支持的路径是 `npm run dev` / `npm start` / `bash tools/verify.sh`。 | `package.json:10,30-31`、`electron/main.cjs:1-4`、`deliverable.md:175-176` |
 | **不承诺"引擎里没有时钟"** | 静态门只查 `window.` / `document.` / `localStorage`（`test/repo.test.mjs:57-70`），没有禁 `Date`；`js/core/rng.js:44` 有 `new Date()`（每日题的日期默认值），`js/core/storage.js:99` 有 `Date.now()`（每日打卡的时刻）。这两个读数都不进 `par`/`steps` 的判定路径，但兄弟仓那句"引擎不许出现 `Date`"在本仓是假的，不要照抄。反过来 `js/core/` 里 `Math.random` 是 0 处（本轮 grep，唯一一处在 `js/main.js:254`），不过这件事**也没有门**在管。 | `test/repo.test.mjs:57-70`、`js/core/rng.js:44`、`js/core/storage.js:99`、本轮 grep |
-| **不承诺关卡数量是 27** | 门是地板不是等号：`test/library.test.mjs:15` 与 `test/repo.test.mjs:142` 都只要求 `≥ 24`。27 是本轮 bake 重烤并 `diff` 之后确认的当前出厂数（`wrote 27 lots (shoal:5 linked:7 twined:8 master:7)`），`master` 那一档本来想要 8 关、实际 7 关并在 stderr 里明说（`tools/bake.mjs:53`）。 | `test/library.test.mjs:15`、`test/repo.test.mjs:142`、本轮副本 bake 输出 |
+| **不承诺关卡数量是 27** | 门是地板不是等号：`test/library.test.mjs:15` 与 `test/repo.test.mjs:156` 都只要求 `≥ 24`。27 是本轮 bake 重烤并 `diff` 之后确认的当前出厂数（`wrote 27 lots (shoal:5 linked:7 twined:8 master:7)`），`master` 那一档本来想要 8 关、实际 7 关并在 stderr 里明说（`tools/bake.mjs:53`）。 | `test/library.test.mjs:15`、`test/repo.test.mjs:156`、本轮副本 bake 输出 |
+| **不承诺文档全量对账**（这条腿只认它看得见的指认） | 它只读**反引号里**的 `文件:行号`，而且只认贴着引用写的那个名字：隔了半句的不算、写在正文里不带反引号的不算、`path:NN` 之后用 `：MM` 续引的写法解析不到、`aria-label` 这种带连字符的名字不构成锚点——折名字的规则在 `tools/doctest.mjs:51`（`tokOf`），"纯标点不算指认"那条判断在 `tools/doctest.mjs:122`（`shaped`）。它证的是"印出来的行号还在它说的那几行里"，不是"文档每句话都对"。破坏证据也只有台架内那一份：九把假引用（`tools/doctest.mjs:206`（`fakeCites`））加一把只在内存里把一条界内真引用挪歪一格的毒针（`tools/doctest.mjs:249`（`poisonNeedle`）），本仓的盘上台架仍然只有部署集那一套 X 刀。 | `test/repo.test.mjs:174-243` |
 
-License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test.mjs:128-134` 核对）。
+License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test.mjs:142-148` 核对）。
+
+## 上线的到底是哪一批文件
+
+这个仓没有打包器：站点=一次文件拷贝。以前「拷哪些」写在 `pages.yml` 的 `run:` 里（手抄的几行
+`cp`）。本地 `index.html` 直读仓库根，永远自洽；线上却按那份清单拷，于是页面后来引用的
+`manifest.webmanifest`、`sw.js`、`icons/*` 可能一个都没上去——线上 404，而仓里的引擎测试与
+真浏览器闸全绿，因为它们跑的都是仓库根，没有任何一步在「按清单拷」的那个环境下加载过页面。
+
+现在清单只有一份，住在 `tools/assemble-site.sh`：CI 调它拷 `_site`，本地闸调它拷临时目录，
+然后**对拷出来的产物**提要求（`tools/deploy-set.mjs`）：
+
+- **W 清单与页面同源**：`pages.yml` 里必须真有 `run: bash tools/assemble-site.sh <dir>` 这一行，
+  `ci.yml` 里必须真有 `run: node tools/deploy-set.mjs`。认的是调用那一行，不是文件里出现过这个
+  路径——注释里本来就会写它，只 grep 字符串会被一句散文喂绿。
+- **R 引用可达**：引用不靠手打名单。从 `index.html` 的 `href/src` 出发，凡解析出来是 `.js`/`.css`
+  的就把那一站也扫一遍（CSS 的 `url()`、JS 去掉注释后的 `'./…'` 字面量、`new URL(x, base)` 的两种
+  基、`navigator.serviceWorker.register`、`scope`），`manifest` 的 icons/screenshots/shortcuts 各自
+  的 `src` 也算引用。取径上读不到的那一站本身就是红（读不到＝这一站根本没扫）。每条引用都必须在
+  产物里且非 0 字节；绝对路径单列一条红，因为 Pages 挂在 `/<repo>/` 前缀下会跳出去。
+- **P 位图不许说谎**：`manifest` 声明的 `sizes` 必须等于 PNG IHDR 的真实宽高——文件图标读文件头，
+  内联成 base64 的图标先解码再读同一段。后一条不是可选项：仓里零二进制文件的承诺（本仓自己的测试钉着）
+  只约束"有没有 .png 这个文件"，图标于是住在清单里；如果 P 段只筛文件名，声明写 512 而真图 192 就一路放行。
+- **H head 的语法形状**：R 段拿 `index.html` 里的字符串当引用，标签没闭合它照样读得动，于是"少一个
+  `>`"这一类坏法在 R 段全绿。H 段逐标签走一遍 head：标签之外只许出现空白，每个标签在自己的 `>` 之前
+  不许碰下一个 `<`。两种坏法各有线上后果——少一个收尾的 `>` 会把下一条 meta 吃成前一条的 attribute
+  （重复的 `content` 按规范丢弃，社交卡就少一句）；多一个裸的 `>` 是 head 里的非空白字符 token，
+  解析器到此弹出 head，后面的 `<link rel="icon">` 不再由 head 认领，Chrome 转去要 `/favicon.ico`
+  并 404，那一页的控制台从此不干净。
+- **钉住自己的条数**：R 段实际检查的路径条数（`29`）与这一次跑的断言条数（`53`），钉在
+  `tools/deploy-set.mjs` 顶部的那对常量里。没改页面却掉了，说明解析断了；删掉一张图标会同时
+  少一条 R10 与那张的 P1/P2，所以两个数一起钉，断言条数能漂就是闸在缩水的信号。这一节故意只写数值、
+  不写那对常量的名字：本仓原有的文档闸会拿"文档里出现过的同名标识号"回数它自己的条数（skyscraper
+  的 D14b 就是这种钉法），两道闸共用一个名字就互相打红。H 段另钉一个数：它扫到的 head 标签条数
+  （`14`），因为"标签之间只剩空白"只在真的扫到标签时才有意义，解析断在半路的语法检查比没有更坏。
+
+`tools/deploy-set-selftest.mjs` 是这几颗钉的阳性证明：它把仓库复制到临时目录，照着每一类断言
+各下一刀（X1 清单不收位图目录 / X2 模块边改名 / X3 CSS 写绝对路径 / X4 `start_url` 绝对 /
+X5 删光 >=512 图标 / X6 少一个必填字段 / X7 声明尺寸与真图不符 / X8 workflow 不调脚本 /
+X9 CI 不跑闸 / X10 是阴性对照——往入口 JS 追加一行只写在注释里的假路径，闸必须仍然绿、条数仍然
+`29`、断言仍然 `53`；X11 og:image 退回相对路径 / X12 og:image 的前缀指向别的 slug /
+X13 内联位图谎报尺寸——只在有靶子时下：X11/X12 要页面上那句 og:image，X13 要清单里真有一段 base64
+图标，没有就打印 SKIP；反过来 X1 没有位图目录可砍时改砍 css，P 段一位都不核时台架直接报靶子不够；
+X14 把 head 里第一个标签的收尾 `>` 删掉 → 必须点名 H3 / X15 在 head 中间插一个裸的 `>` → 必须点名
+H2 / X16 删掉 head 里一条标签 → 必须点名那个 `14` / X17 是 H 段的阴性对照——往 head 里加一条含 `>`
+与 `<meta` 字样的注释，闸必须仍然绿、条数仍然 `53`。这三把刀都按**位置**切而不按字面量找针：head 里
+第一条是什么标签随仓漂，而坏法是形状不是字符串），
+要求每一刀都让闸**点名**变红。靶子从 `DEPLOY_SET_DUMP=1`
+的出处表现挑（取径真的会读的那支 JS / 那一张 CSS，不写死某一个仓的入口名），所以页面改了、仓与仓
+不同，台架跟着走。
+
+H 段不是照着假想的坏法写的：2026-10-06 本仓 `index.html` 的 `description` 那条就漏了自己的收尾
+`>`，行尾还多出一个裸 `>`（同一份 appender 在 nikoli-loops 与 pour 留下同一处，那边被浏览器闸判红，
+本仓 CI 全绿）。把修复前的那份 `index.html` 放回副本里跑这道闸，三条点名红、rc=1：
+
+```
+  FAIL H2 head 里标签之间只剩空白（多出的一个 > 就让 head 就地结束）  非空白片段 [">"]
+  FAIL H3 每个标签在自己的 > 之前不碰下一个 <（少一个收尾 > 会把下一条 meta 吃成 attribute）  吞并下一条的标签体 ["<meta name=\"description\" content=\"保加利亚梯：每次从每"]
+  FAIL H4 head 里解析到的标签条数等于钉在文件里的 EXPECT_HEAD_TAGS（14）  实际 13 条
+部署集：29 条引用（含 4 张位图尺寸核对），失败 3 项
+rows: 53 fail: 3   PREFIX_GATE_RC=1
+```
+
+修后的整闸是 `=== ALL GREEN ===`、`VERIFY_RC=0`，`node tools/deploy-set.mjs` 打 `rows: 53 fail: 0`，
+台架打 `DS_SELFTEST rc=0`。没覆盖的那一半：H 段查的是**字节层面的标签形状**，不查语义——`og:type`
+少了一条但两条 meta 都闭合时它不红，那由 R7 与浏览器闸的控制台断言管。
+
+`node tools/deploy-set.mjs` 与 `node tools/deploy-set-selftest.mjs` 就是 CI 跑的那两条命令本身
+（package.json 里的 `deploy-set` / `deploy-set:selftest` 只是同一支脚本的 npm 入口）；本仓的整闸在 `tools/verify.sh` 的 `=== deploy-set ===` 那一段也各跑一次。它们红的时候并进本仓那条出口的退出码——这一条是这么证的：
+把 ci.yml 里那行 `run: node tools/deploy-set.mjs` 砍掉，本仓整闸必须点名红且退出码非 0。
+所以「本地全绿、线上 404 自己的 manifest / sw.js / 图标」这一类坏法在本地就会红。
