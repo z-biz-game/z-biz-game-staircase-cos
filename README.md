@@ -4,7 +4,7 @@
 一个 `server.cjs` 起页面，一条 `npm test` 把这仓主张的全部数字复跑一遍。
 屏幕上那两个数字不是设定值：**最少** `par` 是发牌/并堆/拆堆这张动作图上的最短操作数，
 由广度优先搜索量出来；**只发牌** `steps` 是定理给的那条纯发牌路线的长度，由逐步模拟量出来。
-两个数都在构建期从关卡自己那份序列化 `spec` 重算一遍，对不上就不写盘（`tools/bake.mjs:80-96`）。
+两个数都在构建期从关卡自己那份序列化 `spec` 重算一遍，对不上就不写盘（`tools/bake.mjs:80-96` 的 `solve`）。
 
 这个文件只写**本轮复跑量出来的事实**，每个数字后面挂 `文件:行号`；量不到的事一律进最后一节。
 本轮跑过的是 `npm test`、`node --test test/`、`node tools/bake.mjs`（在仓库副本里跑的，理由见第五节）
@@ -15,70 +15,70 @@
 
 这个仓**没有日文原文，也没有可点名的英文 URL**，所以不要在这里写"日英双源"。能指的只有四处内部证据：
 
-* **规则本体**写死在三行里：`js/core/deal.js:19-24` —— 新堆的大小是**发牌前**的堆数
+* **规则本体**写死在三行里：`js/core/deal.js:19-24` 的 `deal` —— 新堆的大小是**发牌前**的堆数
   （`const count = piles.length`），每堆减一，抽空了的堆被 `.filter(p => p > 0)` 丢掉。
   同一件事的第二种写法是重数向量版 `dealByCounts()`（`js/core/deal.js:30-41`），两条路在
-  3/6/10/15/21/28 张牌的全部 **4742** 个局面上逐一相等（断言 `test/deal.test.mjs:47-61`，
-  和式与 4742 都在 `test/deal.test.mjs:59-60`；该用例的标题里那句"4137 boards"是旧读数，
+  3/6/10/15/21/28 张牌的全部 **4742** 个局面上逐一相等（断言 `test/deal.test.mjs:47-61` 的 `dealByCounts`，
+  和式与 4742 都在 `test/deal.test.mjs:59-60` 的 `count` 里；该用例的标题里那句"4137 boards"是旧读数，
   断言钉的是 4742 —— 标题与断言不一致，本轮按断言写）。
-  `DESIGN.md:39-45` 把那三行原样贴了一遍，并说明前两位建造者在这条上翻过车。
-* **定理的正反两面都是本仓穷举出来的**，不是引来的：收敛普查 `js/core/deal.js:117-136`，
-  轨道普查 `js/core/deal.js:140-162`。`js/core/deal.js:6-10` 只把这称作"the literature 里那条定理"，
+  `DESIGN.md:39-45`（`count`）把那三行原样贴了一遍，并说明前两位建造者在这条上翻过车。
+* **定理的正反两面都是本仓穷举出来的**，不是引来的：收敛普查 `convergenceCensus()`（`js/core/deal.js:117-136`），
+  轨道普查 `orbitCensus()`（`js/core/deal.js:140-162`）。`js/core/deal.js:6-10` 的 `theorem` 只把这称作"the literature 里那条定理"，
   没有点名文献。
-* **唯一一条可点名的外部锚**是整数分拆表：`test/partition.test.mjs:3-4` 写明它是 OEIS A000041、
+* **唯一一条可点名的外部锚**是整数分拆表：`test/partition.test.mjs:3-4`（`A000041`）写明它是 OEIS A000041、
   "written by hand from the literature and never read back out of this repo's own enumeration"，
-  表体在 `test/partition.test.mjs:13-16`（p(0..15)、18、20、21、28），与递归枚举
-  （`js/core/partition.js:69-75`）和 Euler 五边形数递推（`js/core/partition.js:93-110`）三方对账，
-  对账的断言在 `test/partition.test.mjs:63-67`、`test/partition.test.mjs:88-99`。
+  表体在 `test/partition.test.mjs:13-16`（`PUBLIC_P`，p(0..15)、18、20、21、28），与递归枚举
+  （`js/core/partition.js:69-75` 的 `partitionsOf`）和 Euler 五边形数递推（`js/core/partition.js:93-110` 的 `pentagonalCount`）三方对账，
+  对账的断言在 `test/partition.test.mjs:63-67`（`partitionsOf`）、`test/partition.test.mjs:88-99`（`pentagonalCount`）。
 * 派单文档 `b3-staircase.md` 被 `DESIGN.md:116` 与 `deliverable.md:106` 引用过，
   **但它不在仓里**，本轮在工作区根也没找到，所以本文件不把它算作出处。
 
 玩家的三种操作与"这一步合法吗"只有一个裁决者：`applyAction()`（`js/core/solve.js:25-54`，
-动作种类表 `js/core/solve.js:20`），拒绝时给的那句话在 `js/core/solve.js:57-70`。
+动作种类表 `js/core/solve.js:20` 的 `ACTION_KINDS`），拒绝时给的那句话在 `js/core/solve.js:57-70` 的 `illegalReason`。
 手指点击、拖拽、bake 存下来的 `path`、提示用的搜索、测试里的 `replay()` 全都过这一个闸门
 （`js/core/game.js:42-54` 的 `act()`、`js/core/solve.js:282-292` 的 `replay()`、
-`js/core/make.js:47` 出货前的回放、`js/main.js:187-202` 的 `commit()`），
-所以"测试点得动"和"规则允许"不可能是两套答案；`test/game.test.mjs:143-155` 把 27 关逐关用
-`act()` 走完认证路线，`test/solve.test.mjs:163-168` 再证 `replay()` 走的是同一道闸门。
-`js/view.js` 只交出手势、不判合法性，这件事被静态地钉在 `test/repo.test.mjs:72-81`。
+`js/core/make.js:47` 的 `replay`（出货前的回放）、`js/main.js:187-202` 的 `commit()`），
+所以"测试点得动"和"规则允许"不可能是两套答案；`test/game.test.mjs:143-155` 的 `act` 把 27 关逐关用
+`act()` 走完认证路线，`test/solve.test.mjs:163-168` 的 `replay` 再证 `replay()` 走的是同一道闸门。
+`js/view.js` 只交出手势、不判合法性，这件事被静态地钉在 `test/repo.test.mjs:72-81`（`view`）。
 过关判定只有一句：`js/core/game.js:52` 的 `key(next) === game.targetKey`；
-星级是算术，不是印象：`js/core/game.js:100-105`（`moves ≤ par` 三星，`≤ par+2` 两星，否则一星）。
+星级是算术，不是印象：`js/core/game.js:100-105` 的 `grade`（`moves ≤ par` 三星，`≤ par+2` 两星，否则一星）。
 目标形状由开局自己推出来，不来自表：三角数 `n = T_k` 就是阶梯 `(k,…,1)`，
-非三角数就取**该开局自己的周期轨道上降序字典序最小的那个成员**（`js/core/deal.js:85-105`），
-旁边印的 `orbit(周期, 尾巴)` 就是这个选择的结果（`js/core/partition.js:112-129` 负责"最小"）。
+非三角数就取**该开局自己的周期轨道上降序字典序最小的那个成员**（`js/core/deal.js:85-105` 的 `targetOf`），
+旁边印的 `orbit(周期, 尾巴)` 就是这个选择的结果（`js/core/partition.js:112-129` 的 `minPartition` 负责"最小"）。
 
 ## 二、承诺表：每条都是一条真会红的命令
 
 下面这六条的"读数"一列，**全部来自本轮 `npm test` 的原样输出**（`rows: N fail: 0` 那一行由
-`tools/harness.mjs:36-41` 打印，任何一行失败就 `process.exit(1)`）。本仓没有
+`tools/harness.mjs:36-41` 的 `run` 打印，任何一行失败就 `process.exit(1)`）。本仓没有
 `tools/check.mjs` 那样的聚合门，所以"少跑一套就红"这句话不成立，见最后一节。
 
 | 承诺 | 哪条命令会红 | 判什么 | 条数从哪来 |
 |---|---|---|---|
-| 出厂每一关印着的 `par` / `steps` / `path` 还能从它自己那行的 `spec` 重算出来 | `npm test`（`test/library.test.mjs`）；`node tools/bake.mjs` 在写盘之前自己再判一遍 | `solve(spec.start, spec.target)` 的 `par` 必须等于印着的 `par`（`test/library.test.mjs:30-39`），`targetOf().steps` 与 `stepsToDeal()` 两路都必须等于印着的 `steps`（`test/library.test.mjs:41-53`），`path` 逐步回放必须落在目标上且长度等于 `par`（`test/library.test.mjs:86-93`）；写盘侧是 `tools/bake.mjs:85,87,90,93,95` 这五处 `throw` | 本轮 `rows: 12 fail: 0`；12 也是 `test/library.test.mjs` 里 `test()` 调用点的静态计数 |
-| 三角数牌量的**每一个**开局都收敛到阶梯，最坏步数恰是 `k(k-1)` | `npm test`（`test/deal.test.mjs`）+ `node tools/bake.mjs` | `stuck` 必须是 `[0,0,0,0]`、`open` 必须是 `[0,0,0,0]`、局面数必须是 `[3,11,42,176]`（`test/deal.test.mjs:71-77`）；`worst` 必须是 `[2,6,12,20,30,42]` 且逐个等于 `closedForm`（`test/deal.test.mjs:79-84`）；六个最坏开局逐条点名（`test/deal.test.mjs:86-93`）；bake 侧是 `tools/bake.mjs:108,110` 两处 `throw` | 本轮 `rows: 16 fail: 0`；bake 本轮打印 6 行 `proof converge …` |
-| `par` 是"没有更短"的证明，不是搜索器自己给自己打分 | `npm test`（`test/solve.test.mjs`）+ `node tools/bake.mjs` | `T_k` 最难的开局正好要 `k` 步、且 `unreachable === 0`，五档全查（`test/solve.test.mjs:99-109`）；`distanceMap` 反向 BFS 的读数必须逐个等于单点 `solve()` 的读数，10 张牌 42 个开局全比（`test/solve.test.mjs:111-121`）；`parProof` 要求分层 / 正向 / 反向三条路同数且边表闭合（`test/solve.test.mjs:129-138`，实现 `js/core/solve.js:159-185`）；`buildGraph` 对 15 张牌必须闭合且恰好覆盖 p(15)=176 个局面（`test/solve.test.mjs:140-150`）；超限的搜索必须报 `capped` 而不是猜一个数（`test/solve.test.mjs:152-156`）；bake 侧是 `tools/bake.mjs:122,123,134` | 本轮 `rows: 17 fail: 0`；bake 本轮打印 5 行 `proof par-map …` + 7 行三路对账 |
-| 出题器不许把玩家骗进"数不对的题"：拒绝要说理由，接受要能回放 | `npm test`（`test/make.test.mjs`） | `rateLot` 的五条出口逐个点名（`js/core/make.js:39-49`；断言 `test/make.test.mjs:77-85`，其中 `[6,2,1]`→`par 3 不在带内`、`[1×6]`→`开局即目标`）；生成盘必须 `2 ≤ par ≤ steps`、`path.length === par`、attractor 前缀与 `k` 一致（`test/make.test.mjs:87-102`，四档各 25 颗 seed）；`partitionsOf` 的枚举顺序是生成器契约，写死三条（`test/make.test.mjs:152-156`） | 本轮 `rows: 13 fail: 0` |
-| 同一颗 seed = 同一副牌；每日题在任何设备上是同一副 | `npm test`（`test/make.test.mjs`） | `hashSeed('a') === 723832900` 且必须**不等于**公开 FNV-1a 的 `3826002220`（`test/make.test.mjs:16-27`，实现 `js/core/rng.js:4-13`）；同一 seed 连跑两次逐字段相同、不同 seed 不许撞（`test/make.test.mjs:104-115`）；`dailyLot('2026-09-27')` 两次同盘、次日必须是另一副、而且本机 `targetOf` 重算必须与盘上数字一致（`test/make.test.mjs:125-138`）；`#/random` 四条档位分别同 token 同盘（`test/make.test.mjs:140-150`） | 本轮 `rows: 13 fail: 0`（与上一条共用套件）；本轮另跑 3 次 `makeLotTrying('frozen-seed','twined')`，三次逐字相同：`frozen-seed|4|10,1,1,1,1,1|4` |
-| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 不许自己抄一份 glob 而 leg 的通配不许漏文件、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70`）；CI 那一步必须就是 `npm run check` 本身（把手抄的 glob 加回来就红），而那条 leg 自己的通配既不许漏掉树上任何一个 `.js/.mjs/.cjs`，也不许留下一条扫不到任何文件的死通配（`test/repo.test.mjs:83-105`）；`pages.yml` 只许调 `tools/assemble-site.sh` 那一份清单，清单里是 `index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`（`test/repo.test.mjs:107-114`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:116-130`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:132-140`）；三份文档里每一条 `path:NN` 引用都必须落到仓内一个真实文件的行范围内，引用不存在、同名不唯一或漂出文件末尾都红；**贴着引用写在反引号里的那个名字还必须真的出现在被指的那几行里**（八行判据 `test/repo.test.mjs:174-243`，解析器是 `tools/doctest.mjs:144` 的 `audit`；地板 `refs >= 200` 与「文档印的条数 == 闸数到的条数」都由这条腿自己守，所以"文档确实被扫穿了"不靠本文报数） | 本轮 `rows: 19 fail: 0` |
+| 出厂每一关印着的 `par` / `steps` / `path` 还能从它自己那行的 `spec` 重算出来 | `npm test`（`test/library.test.mjs`）；`node tools/bake.mjs` 在写盘之前自己再判一遍 | `solve(spec.start, spec.target)` 的 `par` 必须等于印着的 `par`（`test/library.test.mjs:30-39`），`targetOf().steps` 与 `stepsToDeal()` 两路都必须等于印着的 `steps`（`test/library.test.mjs:41-53`），`path` 逐步回放必须落在目标上且长度等于 `par`（`test/library.test.mjs:86-93`）；写盘侧是这五处 `throw`（`tools/bake.mjs:85,87,90,93,95`） | 本轮 `rows: 12 fail: 0`；12 也是 `test/library.test.mjs` 里 `test()` 调用点的静态计数 |
+| 三角数牌量的**每一个**开局都收敛到阶梯，最坏步数恰是 `k(k-1)` | `npm test`（`test/deal.test.mjs`）+ `node tools/bake.mjs` | `stuck` 必须是 `[0,0,0,0]`、`open` 必须是 `[0,0,0,0]`、局面数必须是 `[3,11,42,176]`（`test/deal.test.mjs:71-77` 的 `stuck`）；`worst` 必须是 `[2,6,12,20,30,42]` 且逐个等于 `closedForm`（`test/deal.test.mjs:79-84`）；六个最坏开局逐条点名（`test/deal.test.mjs:86-93` 的 `worstFrom`）；bake 侧是两处 `throw`（`tools/bake.mjs:108,110`） | 本轮 `rows: 16 fail: 0`；bake 本轮打印 6 行 `proof converge …` |
+| `par` 是"没有更短"的证明，不是搜索器自己给自己打分 | `npm test`（`test/solve.test.mjs`）+ `node tools/bake.mjs` | `T_k` 最难的开局正好要 `k` 步、且 `unreachable === 0`，五档全查（`test/solve.test.mjs:99-109` 的 `unreachable`）；`distanceMap` 反向 BFS 的读数必须逐个等于单点 `solve()` 的读数，10 张牌 42 个开局全比（`test/solve.test.mjs:111-121` 的 `distanceMap`）；`parProof` 要求分层 / 正向 / 反向三条路同数且边表闭合（`test/solve.test.mjs:129-138` 的 `parProof`，实现 `js/core/solve.js:159-185` 的 `parProof`）；`buildGraph` 对 15 张牌必须闭合且恰好覆盖 p(15)=176 个局面（`test/solve.test.mjs:140-150` 的 `buildGraph`）；超限的搜索必须报 `capped` 而不是猜一个数（`test/solve.test.mjs:152-156` 的 `capped`）；bake 侧是 `tools/bake.mjs:122,123,134` 的 `throw` | 本轮 `rows: 17 fail: 0`；bake 本轮打印 5 行 `proof par-map …` + 7 行三路对账 |
+| 出题器不许把玩家骗进"数不对的题"：拒绝要说理由，接受要能回放 | `npm test`（`test/make.test.mjs`） | `rateLot` 的五条出口逐个点名（`js/core/make.js:39-49` 的 `reason`；断言 `test/make.test.mjs:77-85` 的 `rateLot`，其中 `[6,2,1]`→`par 3 不在带内`、`[1×6]`→`开局即目标`）；生成盘必须 `2 ≤ par ≤ steps`、`path.length === par`、attractor 前缀与 `k` 一致（`test/make.test.mjs:87-102` 的 `makeLot`，四档各 25 颗 seed）；`partitionsOf` 的枚举顺序是生成器契约，写死三条（`test/make.test.mjs:152-156` 的 `partitionsOf`） | 本轮 `rows: 13 fail: 0` |
+| 同一颗 seed = 同一副牌；每日题在任何设备上是同一副 | `npm test`（`test/make.test.mjs`） | `hashSeed('a') === 723832900` 且必须**不等于**公开 FNV-1a 的 `3826002220`（`test/make.test.mjs:16-27` 的 `hashSeed`，实现 `js/core/rng.js:4-13` 的 `hashSeed`）；同一 seed 连跑两次逐字段相同、不同 seed 不许撞（`test/make.test.mjs:104-115` 的 `makeLotTrying`）；`dailyLot('2026-09-27')` 两次同盘、次日必须是另一副、而且本机 `targetOf` 重算必须与盘上数字一致（`test/make.test.mjs:125-138` 的 `dailyLot`）；`#/random` 四条档位分别同 token 同盘（`test/make.test.mjs:140-150` 的 `randomLot`） | 本轮 `rows: 13 fail: 0`（与上一条共用套件）；本轮另跑 3 次 `makeLotTrying('frozen-seed','twined')`，三次逐字相同：`frozen-seed|4|10,1,1,1,1,1|4` |
+| 这个仓自己作为门禁：零依赖、无二进制资产、分层不许渗、CI 不许自己抄一份 glob 而 leg 的通配不许漏文件、端口归属不许撞、README 与交付报告同名 | `npm test`（`test/repo.test.mjs`） | `dependencies` / `devDependencies` 必须都是 `{}`（`test/repo.test.mjs:29-37` 的 `dependencies`）；禁 14 种二进制扩展名且任何被拷的文件不得 > 400 kB（`test/repo.test.mjs:39-46` 的 `BANNED`）；favicon 必须是内联 `data:image/svg+xml,` 且 HTML 里不许有 `<img`（`test/repo.test.mjs:48-55` 的 `favicon`）；`js/core/` 里不许出现 `window.` / `document.` / `localStorage`，只有 `storage.js` 被允许读且必须**抛异常**（`test/repo.test.mjs:57-70` 的 `localStorage`）；CI 那一步必须就是 `npm run check` 本身（把手抄的 glob 加回来就红），而那条 leg 自己的通配既不许漏掉树上任何一个 `.js/.mjs/.cjs`，也不许留下一条扫不到任何文件的死通配（`test/repo.test.mjs:83-105` 的 `Syntax`）；`pages.yml` 只许调 `tools/assemble-site.sh` 那一份清单，清单里是 `index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`（`test/repo.test.mjs:107-114` 的 `pages`）；`verify.sh` 里 CDP 9353 / web 5212、`mktemp -d`、`trap cleanup EXIT`、两个后台 PID 都被 `wait`、启动行里不许出现 swiftshader（`test/repo.test.mjs:116-130` 的 `CDP_PORT`）；README 首行必须逐字是 `# 保加利亚梯 · BULGARIAN` 且与 `deliverable.md` 的 App 名称行同名（`test/repo.test.mjs:132-140` 的 `BULGARIAN`）；三份文档里每一条 `path:NN` 引用都必须落到仓内一个真实文件的行范围内，引用不存在、同名不唯一或漂出文件末尾都红；**贴着引用写在反引号里的那个名字还必须真的出现在被指的那几行里**（八行判据 `test/repo.test.mjs:174-243` 的 `scan`，解析器是 `tools/doctest.mjs:144` 的 `audit`；地板 `refs >= 200` 与「文档印的条数 == 闸数到的条数」都由这条腿自己守，所以"文档确实被扫穿了"不靠本文报数） | 本轮 `rows: 19 fail: 0` |
 
 ## 三、怎么跑：`package.json` 的 8 条脚本逐条核对
 
 `package.json` 全文 39 行，顶层键是 `name`/`version`/`description`/`type`/`main`/`scripts`/`keywords`/
 `author`/`license`/`dependencies`/`devDependencies`/`build`；`dependencies` 与 `devDependencies`
-都是空的 `{}`（`package.json:30-31`），所以不需要 `npm install`。下面每一行都对着
-`package.json:7-16` 抄，最后一列是本轮**是否真的执行过**。
+都是空的 `{}`（`package.json:32-33` 的 `dependencies`），所以不需要 `npm install`。下面每一行都对着
+`package.json:7-16` 的 `scripts` 抄，最后一列是本轮**是否真的执行过**。
 
 | 命令 | 展开成什么 | 出处 | 本轮 |
 |---|---|---|---|
-| `npm start` | `node server.cjs`（端口默认 5212） | `package.json:8`、`server.cjs:60` | 未跑 |
-| `npm run dev` | `node server.cjs 5212` | `package.json:9` | 未跑 |
-| `npm run electron` | `electron .`（electron **不是**依赖，需自备） | `package.json:10`、`electron/main.cjs:1-4` | 未跑 |
-| `npm run bake` | `node tools/bake.mjs`（**会重写 `js/data/lots.js`**） | `package.json:11` | 在仓库副本里跑过，见第五节 |
-| `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK` | `package.json:12` | 跑过（作为 `npm test` 的第一步），打印 `OK` |
-| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done` | `package.json:13` | 跑过（作为 `npm test` 的第二步） |
-| `npm test` | `npm run check && npm run unit` | `package.json:14` | **跑过，rc=0** |
-| `npm run verify` | `bash tools/verify.sh` | `package.json:15` | **按指令未跑** |
+| `npm start` | `node server.cjs`（端口默认 5212） | `package.json:8`（`start`）、`server.cjs:60`（`PORT`） | 未跑 |
+| `npm run dev` | `node server.cjs 5212` | `package.json:9`（`dev`） | 未跑 |
+| `npm run electron` | `electron .`（electron **不是**依赖，需自备） | `package.json:10`（`electron`）、`electron/main.cjs:1-4`（`dependency`） | 未跑 |
+| `npm run bake` | `node tools/bake.mjs`（**会重写 `js/data/lots.js`**） | `package.json:11`（`bake`） | 在仓库副本里跑过，见第五节 |
+| `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK` | `package.json:12`（`check`） | 跑过（作为 `npm test` 的第一步），打印 `OK` |
+| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done` | `package.json:13`（`unit`） | 跑过（作为 `npm test` 的第二步） |
+| `npm test` | `npm run check && npm run unit` | `package.json:14`（`test`） | **跑过，rc=0** |
+| `npm run verify` | `bash tools/verify.sh` | `package.json:15`（`verify`） | **按指令未跑** |
 
 本轮 `npm test` 的原样结论行（`>` 那两行是 npm 自己回显的命令）：
 
@@ -103,7 +103,7 @@ rows: 14 fail: 0     rows: 19 fail: 0     rows: 17 fail: 0     rows:  8 fail: 0
 `deploy-set-selftest.mjs`（363 行）、`harness.mjs`（41 行）、`playtest.mjs`（597 行）、
 `verify.sh`（136 行）、`doctest.mjs`（273 行）。别处如果写"七套 suite"或"平衡闸"，在这个仓都没有对应物。
 
-**文档行号对账**（`node tools/doctest.mjs` 单独复跑；判据是 `test/repo.test.mjs` 最后八行，`test/repo.test.mjs:174-243`）：
+**文档行号对账**（`node tools/doctest.mjs` 单独复跑；判据是 `test/repo.test.mjs` 最后八行，`test/repo.test.mjs:174-243` 的 `scan`）：
 本文、DESIGN 与 deliverable 里每个数字后面都挂着 `文件:行号`，那句"行号指本仓代码"以前只有一条**界内**检查在守——
 文件在不在仓里、行号超没超过文件长度。本轮把它升到与 ferry / tatamibari / echo-location / creek / lightsout /
 yajilin 同一份规则：贴着引用写在反引号里的那个名字，必须真的出现在被指的那几行里。五种贴法都认——
@@ -111,7 +111,7 @@ yajilin 同一份规则：贴着引用写在反引号里的那个名字，必须
 `path:NN`（`dir/file.js::symbol`）；折名字的规则在 `tools/doctest.mjs:51`（`tokOf`），
 引用与指认怎么配对的在 `tools/doctest.mjs:98`（`parseRefs`）。为什么光查越界不够：一条引用漂到**隔壁那一行**
 （同一个文件、还在界内）时，界内检查一条都不会红，而这正是这一族反复撞到的漂移。
-本轮这条腿解析 248 条、认到锚点 32 条，全部在盘上、全部落回原处、没有一条整段落在空行上。
+本轮这条腿解析 251 条、认到锚点 244 条，全部在盘上、全部落回原处、没有一条整段落在空行上。
 "在界内"不等于"指到了代码"：一条不带名字的引用即使落在 1 与文件行数之间，也可能只是指到了一段行距，
 界内与锚点两道查都看不见它——所以界内检查之后还有一道，被指的区间 join 完 trim 为空就红。
 审计的文档清单由 `readdirSync` 现数（`tools/doctest.mjs:180`（`scan`）），不是手抄的三份名单——
@@ -122,9 +122,11 @@ yajilin 同一份规则：贴着引用写在反引号里的那个名字，必须
 在同一解析器下必须判绿；模板 body `NAME:<占位>` 取字面量前缀，一绿一红；纯标点（`，`）隔开的那个名字
 不构成指认，必须判绿；最后一把毒针只在内存里把一条界内的真引用挪歪一格，红的就是锚点那半边
 （`tools/doctest.mjs:249`（`poisonNeedle`），盘上的文档一个字不动）。
-文档里印的「解析 248 条」与「认到锚点 32 条」由这条腿自己对账：抄错一格就红，两处数字全删掉也红
-（只删一处不算——另一处还在对账，本轮在 `_scratch` 的副本树上试过：129→130 那一格、248→247 那一格、
-以及把两处都抹掉，三把各退 1，盘上的仓库一个字没动）。
+文档里印的「解析 251 条」与「认到锚点 244 条」由这条腿自己对账：抄错一格就红，两处数字全删掉也红
+（四把都在 `_scratch` 下的同名副本树上跑，盘上的仓库一个字没动，每把的 rc 都是读回来的：把其中一处那一条改歪，
+判词是「写了 2 处：250/251 · 闸数到 251」；把锚点那一条改歪，判词是「写了 2 处：243/244 · 闸数到 244」；
+两处都抹掉，判词换成「写了 0 处：（一处都没写）」——三把都 `rows: 19 fail: 1`、rc=1。第四把是负向的负向：
+只抹掉一处仍判绿，因为另一处还在对账，所以这条闸查的是"文档里没有一处读数在说谎"，不是"这句话必须存在"）。
 空行那一道也在副本上验过牙：把一条界内的真引用改成指向 `js/core/solve.js` 的第一处空行，这条腿为它红、
 红行点名「那几行整段是空行」，复原后回绿（读数与判词在 `_tmp-staircase-blank-teeth.log`，`TEETH_OK`）；
 本轮三份文档里没有一条引用整段落在空行上，所以这道加严没有修掉一处漂，它堵的是"以后也没人看得见"。
@@ -156,8 +158,8 @@ B 腿把本文上面那条 `audit` 引用的名字截成 `aud`，锚点那一行
 | `test/solve.test.mjs` | 三动作的合法性与文案、`neighbors` 的保牌与规范化、把手算 fixture（`[6]`→par 2、六张单牌→par 3、`[2,2,1,1]`→par 1 而只发牌要 6）、`T_k` 最难开局 = `k`、42 个开局逐一等于 `distanceMap`、12 张牌最难开局 par 5、三路对账、`buildGraph` 闭合、超限报 `capped`、`replay` 走同一闸门 | 17 | 17 |
 | `test/storage.test.mjs` | 存档：没有 `window.localStorage` 就**抛**、后端必须真有三件套、`best` 只降不升 / `plays` 只升 / `perfect` 一旦成立不再掉、`unlock` 单调、每日打卡按日期分账、`solves/ops/deals/hints/perfect` 分开记账、清档真的删 key、坏 JSON 与坏形状都从空白开始而不是崩 | 8 | 8 |
 
-`tools/bake.mjs` 是第二层门，但它**不在 `npm test` 里、也不在 CI 里**（`ci.yml:32-35` 只有 Syntax 与 Suites
-两步，没有 bake 步骤），而且它会重写 `js/data/lots.js`（`tools/bake.mjs:168-170`）。
+`tools/bake.mjs` 是第二层门，但它**不在 `npm test` 里、也不在 CI 里**（`ci.yml:32-35`（`Syntax`）只有 Syntax 与 Suites
+两步，没有 bake 步骤），而且它会重写 `js/data/lots.js`（`tools/bake.mjs:168-170` 的 `writeFileSync`）。
 本轮为了不动仓里的文件，把它在仓库副本上跑了一遍（`rsync --exclude .git` 到工作区根的
 `_tmp-staircase-bake/`），rc=0，结论行原样：
 
@@ -170,19 +172,19 @@ max BFS states 1692 · slowest par-proof 196ms · total 0.5s
 
 外加 18 行 `proof …`（6 行收敛、5 行 par-map、7 行三路对账），stderr 一行
 `note: master reached 7/8 (only so many openings clear the band)`。
-它内部有 **12 处 `throw`**（`tools/bake.mjs:85,87,90,93,95,102,108,110,122,123,134`）全部在写盘那一步之前，
+它内部写盘路径上的 `throw` 逐行列在这里（`tools/bake.mjs:85,87,90,93,95,102,108,110,122,123,134` 的 `throw`——每一行都真的坐着一个 `throw`，文档腿逐条核过），
 所以"数对不上就不落盘"是顺序决定的事实，不是承诺。
 本轮还做了一件没有闸门支撑、只能算一次性对账的事：**副本烤出来的 `lots.js` 与仓里那份逐字节相同**
-（`diff` 忽略 `BAKED_AT` 那一行为空；仓里那份 11,097 B，`deliverable.md:194` 记的线上抓到的也是 11,097 B）。
+（`diff` 忽略 `BAKED_AT` 那一行为空；仓里那份 11,097 B，`deliverable.md:194`（`lots`）记的线上抓到的也是 11,097 B）。
 这条不要读成"重烤永远得到同一批盘"——bake 会静默重写文件，CI 也不跑它，能钉住出厂数据的只有
-`test/library.test.mjs` 那一套，而且它对关卡数只有 `≥ 24` 的地板（`test/library.test.mjs:15`、
-`test/repo.test.mjs:156`），本轮实测是 27。
+`test/library.test.mjs` 那一套，而且它对关卡数只有 `≥ 24` 的地板（`test/library.test.mjs:15` 的 `ALL`、
+`test/repo.test.mjs:154-156` 的 `rows`），本轮实测是 27。
 
-浏览器层五段（`bash tools/verify.sh`，**本轮未跑**）：`verify.sh:99` 的默认清单是
-`boot play routes save pointer`，每段交回 `rows/fail` 两个数（`verify.sh:101-122`），
+浏览器层五段（`bash tools/verify.sh`，**本轮未跑**）：`verify.sh:99`（`SCENARIOS`）的默认清单是
+`boot play routes save pointer`，每段交回 `rows/fail` 两个数（`verify.sh:101-122` 的 `rows`），
 判据本体全在 `tools/playtest.mjs` 的 `SCENARIOS`（`tools/playtest.mjs:360-592`）与
 `pointerScenario()`（`tools/playtest.mjs:171-357`）。**源码里没有钉"每段该交回几条"的期望值**，
-`fail` 为空就 `exit 0`（`verify.sh:121`、`verify.sh:135-136`），所以本仓**没有**
+`fail` 为空就 `exit 0`（`verify.sh:121` 的 `exit`、`verify.sh:135-136` 的 `exit`），所以本仓**没有**
 "少一条断言就红"这类地板。能给的只有静态计数（`rec()` 调用点，`tools/playtest.mjs`）：
 
 | 段 | 判什么 | 必然执行的 `rec()` 数 |
@@ -196,9 +198,9 @@ max BFS states 1692 · slowest par-proof 196ms · total 0.5s
 合计 71。`@pointer` 另有 4 处只在事情坏掉时才追加的 `rec()`（`tools/playtest.mjs:227,232,241,242`）。
 `@play` 里那两条"只发牌"和 `@pointer` 里"并堆/过拖"两条形如 `if … else rec(…, false, …)`
 的分支值得单独说一句：它们**没有跳过**，条件不满足就直接判 false
-（`tools/playtest.mjs:455-456`、`tools/playtest.mjs:307`、`tools/playtest.mjs:328`），
+（`tools/playtest.mjs:455-456` 的 `rec`、`tools/playtest.mjs:307` 的 `rec`、`tools/playtest.mjs:328` 的 `rec`），
 所以这几条红的时候是真的有东西不对，不是没测到。
-`deliverable.md:139-156` 记录过一次实跑交回的正是 13/13/14/12/19、`(none)` 控制台、`=== ALL GREEN ===`，
+`deliverable.md:139-156`（`GREEN`）记录过一次实跑交回的正是 13/13/14/12/19、`(none)` 控制台、`=== ALL GREEN ===`，
 那是**上一轮别人的读数**，本文件不把它当本轮证据。
 
 ## 五、目录（本轮 `ls` 的真实结果，行数由 `wc -l` 量）
@@ -218,7 +220,7 @@ js/core/storage.js   132 行 / 4,202 B    一个 key（staircase.save.v1）、�
 js/core/rng.js        49 行 / 1,523 B    hashSeed（FNV-1a 派生的两轮 UTF-16 混合）+ mulberry32
 js/data/lots.js       37 行 / 11,097 B   构建期产物：27 关 + TIERS_META + BAKED_AT，每行自带 spec
 server.cjs            70 行 / 2,326 B    零依赖静态服务（CommonJS，Electron 也 require 它）
-tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘前的 12 处 throw + 打印那 18 行 proof
+tools/bake.mjs       179 行 / 8,801 B    出题 + 写盘路径上的那些 throw（逐行清单见上文那条 `tools/bake.mjs:85` 起的引用）+ 打印那 18 行 proof
 tools/harness.mjs     41 行 / 1,251 B    node 与浏览器同形状的断言行，rows/fail 两列
 tools/playtest.mjs   597 行 / 31,169 B   裸 CDP 驱动（node 全局 fetch/WebSocket）+ 五段判据
 tools/deploy-set.mjs 400 行 / 23,283 B  产物闸：按 pages.yml 那份清单真拷一遍产物，要求页面会去要的每个 URL 都在产物里，并要求 head 自己的标签形状闭合（W/R/P/H 四族）
@@ -232,15 +234,15 @@ DESIGN.md 135 行 / README.md（本文件）/ deliverable.md 209 行 / LICENSE /
 ```
 
 出货产物是 **13 个文件**：`index.html` + `css/game.css` + `js/` 下 11 个 `.js`（本轮
-`find js -name '*.js' | wc -l` 实测 11）。名单由 `pages.yml:29-31` 那三行决定，
-`test/repo.test.mjs:107-114` 不许它把 `tools/`、`test/`、`server.cjs`、`electron/` 带进产物，
+`find js -name '*.js' | wc -l` 实测 11）。出货名单由 `tools/assemble-site.sh:18-23` 的 `manifest.webmanifest` 那一类 `cp` 决定（`pages.yml:26-27` 的 `Assemble` 调的就是这支脚本；`pages.yml:31-33` 的 `artifact` 只把那个目录传上去），
+`test/repo.test.mjs:107-114` 的 `pages` 不许它把 `tools/`、`test/`、`server.cjs`、`electron/` 带进产物，
 也不许写 `path: .`。
 
 ## 六、难度是怎么量出来的
 
 这个仓没有抽样平衡脚本，难度是一张**全量直方图**：`distanceMap(n, staircase(k))`
 把 `p(n)` 个局面和它们之间的所有合法动作整张建出来，从目标反向 BFS 一次，
-于是同时得到每一个开局的 `par`、最难开局要几步、以及直方图（`js/core/solve.js:224-262`）。
+于是同时得到每一个开局的 `par`、最难开局要几步、以及直方图（`js/core/solve.js:224-262` 的 `distanceMap`）。
 本轮 `node tools/bake.mjs` 逐字打印（副本内跑，机器 Darwin 26.6.2 arm64、15 核、node v26.8.1）：
 
 ```
@@ -251,8 +253,8 @@ proof par-map n=21: 792 positions / 10225 actions · max par 6 from 2,2,2,2,2,2,
 proof par-map n=28: 3718 positions / 63382 actions · max par 7 from 3,3,3,3,3,3,3,3,3,1 · hist [[0,1],[1,33],[2,298],[3,1055],[4,1461],[5,713],[6,144],[7,13]]
 ```
 
-档位是**照着这张直方图的上半部**定的，不是先定再找证据（`js/core/make.js:14-28` 的注释这么写，
-`DESIGN.md:118` 记了它一开始写错成 `par ≥ 2` 的那次）：`shoal 2-3 / linked 3-4 / twined 4-5 / master 5-7`。
+档位是**照着这张直方图的上半部**定的，不是先定再找证据（`js/core/make.js:14-28` 的 `TIERS` 注释这么写，
+`DESIGN.md:118`（`par`）记了它一开始写错成 `par ≥ 2` 的那次）：`shoal 2-3 / linked 3-4 / twined 4-5 / master 5-7`。
 本轮从 `js/data/lots.js` 读出来的实际分布是（`node -e` 只读查询 `js/core/library.js` 的 `ALL`）：
 
 | 档 | 关数 | 牌量 | 出厂 `par` 逐个 | `par` 带（定义 → 实到） | 只发牌 `steps` |
@@ -263,16 +265,16 @@ proof par-map n=28: 3718 positions / 63382 actions · max par 7 from 3,3,3,3,3,3
 | `master` 大师 | 7 | 12/18/21/28 | 5,5,5,5,5,5,5 | 5-7 → **只有 5** | 5,7,8,10,11,12,37 |
 
 所以两个带的高半边（`twined` 的 5、`master` 的 6-7）在出厂数据里一次都没被用到——
-带是**过滤器**（超出就拒，`js/core/make.js:46`），不是承诺"每档都会铺开"。
+带是**过滤器**（超出就拒，`js/core/make.js:46` 的 `parMax`），不是承诺"每档都会铺开"。
 关卡数与接受率是本轮实测：293 次尝试接受 27 关（9.2%），拒绝原因点名到个位
 （`par 2 不在带内=100 · par 3 不在带内=81 · 一步内的题=40 · par 4 不在带内=32 · 重复局面=10 · 开局即目标=3`），
-`master` 只凑到 7/8 关并在 stderr 里明说（`tools/bake.mjs:53`）。
+`master` 只凑到 7/8 关并在 stderr 里明说（`tools/bake.mjs:53` 的 `wanted`）。
 
 两个数各代表一种难度，而它们的差就是玩家的自由度：本轮实测 27 关里 **26 关 `par < steps`**，
 唯一 `par == steps` 的是 `master-05`（21 张，开局 `7,2,2,2,2,2,2,2`，认证路线是五次发牌），
 悬殊最大的是 `master-07`（`par 5 / steps 37`，比值 7.4）；这组事实由
-`test/library.test.mjs:55-67` 钉成门（`par ≤ steps` 恒成立、`par ≥ 2`、至少九成严格更短、最大比值 ≥ 5），
-`DESIGN.md:74-76` 写的是同一批数（本轮自己重查过，与它一致，含 `master-05` 那关的牌面）。
+`test/library.test.mjs:55-67` 的 `par` 钉成门（`par ≤ steps` 恒成立、`par ≥ 2`、至少九成严格更短、最大比值 ≥ 5），
+`DESIGN.md:74-76` 的 `steps` 写的是同一批数（本轮自己重查过，与它一致，含 `master-05` 那关的牌面）。
 `js/data/lots.js` 每关还带着搜索见过的局面数 `states`：本轮最小 6、最大 1692（`master-07`），
 而 `p(28) = 3718` 是这个动作图能有的最大结点集，所以提示那条**点击时的有界搜索**
 （`js/core/game.js:91` 的 `maxStates = 20000`）在本仓所有能出货的牌量上都撞不到上限——
@@ -284,70 +286,70 @@ proof par-map n=28: 3718 positions / 63382 actions · max par 7 from 3,3,3,3,3,3
 `_tmp-staircase-bench.mjs`，机器负载 `loadavg 2.47 / 2.72 / 2.80`，15 核，node v26.8.1）：
 `#/daily` 八个日期全部出得来，平均 **3.9 ms**、最坏 **14.3 ms**，尝试次数 1–7；
 `master` 档 `makeLotTrying` 二十颗 seed 二十次成功，平均 **19.6 ms**、最坏 **50.5 ms**、
-尝试次数最多 25（上限 40，`js/core/make.js:91`）；最宽一关的 `reSolve` **14.2 ms**、
+尝试次数最多 25（上限 40，`js/core/make.js:91` 的 `attempts`）；最宽一关的 `reSolve` **14.2 ms**、
 一次 `hint` **13.6 ms**（见 1692 个局面）；`distanceMap(28)` **94.7 ms**（3718 结点 / 63382 边）；
 `convergenceCensus(15)` 0.7 ms、`orbitCensus(12)` 0.3 ms（77/77/0、`withPreperiod` 67、
 `maxPreperiod` 8 —— 出厂那关 12 张牌的 `master-01` 标签正是 `orbit(5,8)`）；
 bake 全量 **0.5 s**、`slowest par-proof` **196 ms**。
-`DESIGN.md:87-105` 那张表记的是平均 13 ms / 最坏 36 ms / 最坏 137 ms / 311–533 ms，
+`DESIGN.md:87-105`（`makeLotTrying`）那张表记的是平均 13 ms / 最坏 36 ms / 最坏 137 ms / 311–533 ms，
 比本轮大一截；它来自一个**没有入库**的一次性脚本（`deliverable.md:172-174` 自己写明了），
 所以两处读数不该被当成同一个量互相对账，本文件只把本轮这一组当数。
 
 ## 七、端口与 URL 形态
 
-本仓拥有的两个号写死在源码里，也被 `test/repo.test.mjs:116-130` 按字面正则钉住：
-**web 5212**（`tools/verify.sh:22`、`server.cjs:60` 的默认值、`package.json:9` 的 `dev`、
-`tools/playtest.mjs:16` 的默认 `BASE_URL`）、**CDP 9353**（`tools/verify.sh:21`、
-`tools/playtest.mjs:13`）。`server.cjs:60` 允许 `argv[2] || process.env.PORT || 5212`，
+本仓拥有的两个号写死在源码里，也被 `test/repo.test.mjs:116-130` 的 `CDP_PORT` 按字面正则钉住：
+**web 5212**（`tools/verify.sh:22` 的 `WEB_PORT`、`server.cjs:60` 的 `PORT` 默认值、`package.json:9` 的 `dev`、
+`tools/playtest.mjs:16` 的 `BASE_URL` 默认）、**CDP 9353**（`tools/verify.sh:21` 的 `CDP_PORT`、
+`tools/playtest.mjs:13` 的 `CDP_PORT`）。`server.cjs:60`（`PORT`）允许 `argv[2] || process.env.PORT || 5212`，
 `verify.sh` 也接受 `WEB_PORT=` / `CDP_PORT=` 覆盖，但默认值才是门读的那个数。
-`verify.sh:6-9` 的注释点名了兄弟仓的 `:5180/:9340`（gridlock）与 `:5181/:9341`（nine-rings），
+`verify.sh:6-9` 的 `WEB_PORT` 注释点名了兄弟仓的 `:5180/:9340`（gridlock）与 `:5181/:9341`（nine-rings），
 理由是"别人家的服务会答在这一口上，于是整套用例静默地在测另一个游戏"——这两个外部号是**注释里的说法**，
-本轮没有去查那两个仓。`electron/main.cjs:11` 用 `port: 0` 拿临时端口，与上面两个号无关。
+本轮没有去查那两个仓。`electron/main.cjs:9`（`port`）用 `port: 0` 拿临时端口，与上面两个号无关。
 
-浏览器闸**只跑一种 URL 形态**：`BASE=${BASE_URL:-http://127.0.0.1:5212/}`（`tools/verify.sh:23`），
+浏览器闸**只跑一种 URL 形态**：`BASE=${BASE_URL:-http://127.0.0.1:5212/}`（`tools/verify.sh:23` 的 `BASE`），
 也就是仓库自己就是文档根的 root 形态；`tools/verify.sh` 里**没有** `SHAPES` 这类多形态循环
-（本轮 grep 无命中），`playtest.mjs:523` 断言的路由形态（`#/c/…`、`#/lot/…`、`#/daily`、`#/random/…`）
-全都是 hash，不是路径前缀。CI 的 browser job 原样继承这个默认（`.github/workflows/ci.yml:46-50`
+（本轮 grep 无命中），`playtest.mjs:523`（`hash`）断言的路由形态（`#/c/…`、`#/lot/…`、`#/daily`、`#/random/…`）
+全都是 hash，不是路径前缀。CI 的 browser job 原样继承这个默认（`.github/workflows/ci.yml:48-58`（`SKIP_UNIT`）
 只设 `SKIP_UNIT: 1` 与 `WD_TIMEOUT: 240`），**所以 CI 覆盖的是 root 一种，不覆盖 Pages 前缀那一种**。
-`pages.yml:30-43` 把产物交给 GitHub Pages，前缀形态（`/z-biz-game-staircase-cos/…`）只有在真实部署之后
-才存在，而本仓的 `server.cjs:49-55` 只有一个 docroot，**没有**"把仓库挂在一段前缀下"的本地服务模式，
+`pages.yml:30-43`（`deploy`）把产物交给 GitHub Pages，前缀形态（`/z-biz-game-staircase-cos/…`）只有在真实部署之后
+才存在，而本仓的 `server.cjs:49-55` 的 `startServer` 只有一个 docroot，**没有**"把仓库挂在一段前缀下"的本地服务模式，
 所以要跑前缀形态只能 `BASE_URL=https://…/z-biz-game-staircase-cos/ bash tools/verify.sh`
-（脚本会因此不起服务、只连一次 Chrome，`tools/verify.sh:23` 的覆盖就是为这条路径留的）——
+（脚本会因此不起服务、只连一次 Chrome，`tools/verify.sh:23` 的 `BASE` 覆盖就是为这条路径留的）——
 本轮没有跑，也没有做任何网络核对。
 
 `bash tools/verify.sh` 的失败是分号段的，每条都有明确的退出码，值得背下来：
-`exit 2` 找不到 Chrome（`tools/verify.sh:33`）、`exit 6` `:$WEB_PORT` 已被占用
-（`tools/verify.sh:36-39`，`lsof -nP -iTCP -sTCP:LISTEN`）、`exit 3` DevTools 始终没在
-`:$CDP_PORT` 上绑定（`tools/verify.sh:61-66`）、`exit 4` 静态服务始终没答 `BASE`
-（`tools/verify.sh:67-72`）、`exit 5` 页面里始终没有 `window.stair.state.id`
-（`tools/verify.sh:92-97`），其余失败走 `FAILED=1` 那条汇总（`tools/verify.sh:75,133-136`）。
+`exit 2` 找不到 Chrome（`tools/verify.sh:33` 的 `CHROME_BIN`）、`exit 6` `:$WEB_PORT` 已被占用
+（`tools/verify.sh:36-39` 的 `lsof`，`lsof -nP -iTCP -sTCP:LISTEN`）、`exit 3` DevTools 始终没在
+`:$CDP_PORT` 上绑定（`tools/verify.sh:61-66` 的 `devtools`）、`exit 4` 静态服务始终没答 `BASE`
+（`tools/verify.sh:67-72` 的 `server`）、`exit 5` 页面里始终没有 `window.stair.state.id`
+（`tools/verify.sh:92-97` 的 `stair`），其余失败走 `FAILED=1` 那条汇总（`tools/verify.sh:75,133-136` 的 `FAILED`）。
 两处值得注意的不对称：预检**只查 web 口**，CDP 口 9353 不查，占了就撞上别人家的浏览器
-（`tools/verify.sh:36` 那一个 `if`，`verify.sh:8-10` 把这条留给人工 `pgrep`）；
-截图目录默认落在仓外的 `/tmp/puzzle-brief/shots`（`tools/verify.sh:24`），
+（`tools/verify.sh:36` 的 `lsof` 那一个 `if`，`verify.sh:8-10`（`pgrep`）把这条留给人工 `pgrep`）；
+截图目录默认落在仓外的 `/tmp/puzzle-brief/shots`（`tools/verify.sh:24` 的 `SHOTDIR`），
 `tools/` 与 `js/` 都不含 `shots/`，所以跑过一次浏览器闸之后仓里不会多出文件。
-`verify.sh:57` 那条看门狗（默认 300 s、CI 给 240 s）会直接 `cleanup`，
+`verify.sh:57` 的 `WD_TIMEOUT` 那条看门狗（默认 300 s、CI 给 240 s）会直接 `cleanup`，
 `cleanup` 里 `kill -9` 再 `wait` 两个后台 PID 并删掉 `mktemp -d` 的 profile
-（`tools/verify.sh:41-53`），这两条同样是 `test/repo.test.mjs:120-122` 按字面读的。
+（`tools/verify.sh:41-53` 的 `mktemp`），这两条同样是 `test/repo.test.mjs:120-122` 的 `wait` 按字面读的。
 
 ## 八、这个仓**不承诺**什么
 
 | 不承诺 | 为什么（本轮实测/源码点名） | 出处 |
 |---|---|---|
-| **不承诺浏览器闸的断言条数是被钉住的期望值** | 本轮两条腿都跑过：`bash tools/verify.sh` 五档 13/13/14/12/19 加 console、部署集双闸 29 条引用/4 张位图，全部 `fail: 0`，收尾 `=== ALL GREEN ===`、rc=0（这些是**那一跑的读数**，住在 `_tmp-fleet-ds-staircase-verify-full-r1.log`，不是仓里的期望值）。更要紧的是**源码里没有条数地板**：`verify.sh:117-121` 只打印 `rows:` 与 `fail:`，`fail` 为空就退 0，node 侧 `verify.sh:80-84` 与 `package.json:13` 都是 `test/*.test.mjs` 的 glob——把八个套件删掉三个，两道门照样全绿。本文件给的 13/13/14/12/19 与 104 都是**静态或本轮实测的读数**，不是被钉住的期望值。 | `tools/verify.sh:80-84,99,117-121`、`package.json:13`、`tools/harness.mjs:36-41` |
-| **不承诺站点在线，也不承诺 Pages 前缀形态可用** | CI 的 browser job 只跑 root 形态，Pages workflow 只是拷文件、不测前缀 URL，本地服务只有一个 docroot 因而没有前缀模式可跑；本轮没做任何网络核对。仓内唯一相关记录是 `deliverable.md:185-199`（主代理 2026-09-27 实抓的四个 200 与发布 sha `fd0fe15`），那是**转述**，不是本轮读数，也不是任何一道门。 | `.github/workflows/ci.yml:46-50`、`.github/workflows/pages.yml:27-35`、`server.cjs:49-55`、`deliverable.md:185-199` |
-| **不承诺界面手感与美术** | 浏览器段只认三类证据：DOM id 齐不齐（`tools/playtest.mjs:200-201`）、画布有没有真像素与被画过（`tools/playtest.mjs:209`、`368-376`）、真事件之后状态与盘面变了没有（`tools/playtest.mjs:220-245`）。类名、`aria-*`、CSS 观感、注释里的意图一概不是证据；`css/game.css:103-106` 那两条 `[hidden]` 规则之所以重要，只是因为它们决定事件会不会被盖住的卡片吃掉（`DESIGN.md:111`）。 | `tools/playtest.mjs:171-357`、`css/game.css:103-106,180`、`DESIGN.md:111` |
-| **不承诺 `par` 是"人类觉得难"，也不承诺难度梯子铺开** | `par` 是动作图上的最短操作数，仅此而已（`js/core/solve.js:97-129`）；带是过滤器不是分布承诺，本轮出厂数据里 `twined` 八关全是 4（带定义 4-5）、`master` 七关全是 5（带定义 5-7），高半边一次没被碰到。本仓也没有 `tools/balance.mjs`、没有"单调性"断言、没有 p95/预算那一套定价；跨档之间唯一的单调证据是那张 `par-map` 直方图的最大值 `3/4/5/6/7`。 | `js/core/make.js:23-27`、`js/core/solve.js:224-262`、本轮 `npm run bake` 副本读数 |
-| **不承诺同一颗 seed 跨版本还是同一副牌，也不承诺存档会按题面作废** | seed→盘 是纯函数（本轮同 seed 连跑三次逐字相同，判定路径上没有随机数），但契约是"枚举顺序 + 那个 mixer"：`partitionsOf` 的字典序被 `test/make.test.mjs:152-156` 钉住、`hashSeed('a')=723832900` 被 `test/make.test.mjs:16-27` 钉住，流水线一改版同一个 seed 就是另一张盘。而 `js/core/storage.js` 全文没有题面指纹字段（存档形状只有 `records/daily/unlocked/stats`，`js/core/storage.js:37-45`），旧成绩只会按 `lot.id` 找回来。装机时的对账只到"打印一句警告"这一层（`js/main.js:96-98`），`@boot` 那条 `recheck.agrees` 判的是**当前这一关**，不是存档。 | `js/core/partition.js:65-75`、`js/core/make.js:72-80`、`js/core/storage.js:37-45`、`js/main.js:96-98` |
-| **不承诺每日题与随机题永远出得来** | `makeLotTrying` 40 次封顶，撞满就返回 `ok:false`（`js/core/make.js:91-97`）；`dailyLot`/`randomLot` 拿到 null 时装配层**静默回落**到 `ALL[0]`，标签照旧写着"每日梯 · 日期"（`js/core/library.js:53-66`、`js/main.js:64-73`）。本轮 8 个日期 8/8 出、master 档 20 颗 seed 20/20 出、最多 25 次尝试（离 40 还有余量），但没有任何一道门判这条回落。裸 `#/random` 写进 URL 的那段 token 来自 `Math.random()`（`js/main.js:254`），所以"分享链接必同盘"只对已经带 token 的链接成立。 | `js/core/make.js:91-97`、`js/core/library.js:53-66`、`js/main.js:64-73,254`、本轮观测脚本 |
-| **不承诺 `n > 28` 会被拒绝** | `partitionsOf(n)` 对任何正整数都算得动（`js/core/partition.js:69-75`），`MAX_N` 这类常量在发布前已被删除（`deliverable.md:201-204` 记录了这次删除）。"牌量上限 28"这件事由 `test/make.test.mjs:70` 钉死的 `TIERS` ns 列表 `[6]/[10]/[15]/[21,28,12,18]` 保证——是**档位表没有更大的 n**，不是引擎会拒绝更大的 n。 | `js/core/partition.js:69-75`、`test/make.test.mjs:68-75`、`DESIGN.md:130` |
-| **不承诺非三角数关卡的目标是唯一答案** | 12 / 18 张牌没有阶梯，目标取**该开局自己轨道上降序字典序最小**的那个周期成员（`js/core/deal.js:85-105`、`js/core/partition.js:112-129`）；同一轨道里其余成员同样合法，"这个目标比别的难"没有任何测量。门的强度只是：`attractor` 必须长成 `orbit(a,b)`、`cycleLen ≥ 2`（`test/library.test.mjs:69-83`），以及 `master` 档至少两关是反例且牌量只能是 12 或 18（`test/library.test.mjs:140-148`）。 | `js/core/deal.js:85-105`、`test/library.test.mjs:69-83,140-148` |
-| **不承诺任何计时上界** | 计时量与结构量分家的理由写在 `DESIGN.md:81-105`，而那张计时表的来源脚本没有入库（`deliverable.md:172-174`）。本轮同一台机器重测普遍更小（daily 平均 3.9 ms vs 表内 13 ms；`slowest par-proof` 196 ms vs 表内 311–533 ms），说明这些数随负载走。所以"点击时只做有界搜索"这条是真的（`js/core/game.js:91` 的 20000 是个字面上界），"最坏 137 ms"那类话只能当某一次的读数。 | `DESIGN.md:81-105`、`js/core/game.js:88-96`、本轮观测脚本 |
-| **不承诺 `npm run electron` 能用** | 脚本在（`package.json:10`），electron 却**不是**依赖（`package.json:30-31` 两个 `{}`），`electron/main.cjs:1-4` 自己写明了这一点；本轮没跑过它。受支持的路径是 `npm run dev` / `npm start` / `bash tools/verify.sh`。 | `package.json:10,30-31`、`electron/main.cjs:1-4`、`deliverable.md:175-176` |
-| **不承诺"引擎里没有时钟"** | 静态门只查 `window.` / `document.` / `localStorage`（`test/repo.test.mjs:57-70`），没有禁 `Date`；`js/core/rng.js:44` 有 `new Date()`（每日题的日期默认值），`js/core/storage.js:99` 有 `Date.now()`（每日打卡的时刻）。这两个读数都不进 `par`/`steps` 的判定路径，但兄弟仓那句"引擎不许出现 `Date`"在本仓是假的，不要照抄。反过来 `js/core/` 里 `Math.random` 是 0 处（本轮 grep，唯一一处在 `js/main.js:254`），不过这件事**也没有门**在管。 | `test/repo.test.mjs:57-70`、`js/core/rng.js:44`、`js/core/storage.js:99`、本轮 grep |
-| **不承诺关卡数量是 27** | 门是地板不是等号：`test/library.test.mjs:15` 与 `test/repo.test.mjs:156` 都只要求 `≥ 24`。27 是本轮 bake 重烤并 `diff` 之后确认的当前出厂数（`wrote 27 lots (shoal:5 linked:7 twined:8 master:7)`），`master` 那一档本来想要 8 关、实际 7 关并在 stderr 里明说（`tools/bake.mjs:53`）。 | `test/library.test.mjs:15`、`test/repo.test.mjs:156`、本轮副本 bake 输出 |
-| **不承诺文档全量对账**（这条腿只认它看得见的指认） | 它只读**反引号里**的 `文件:行号`，而且只认贴着引用写的那个名字：隔了半句的不算、写在正文里不带反引号的不算、`path:NN` 之后用 `：MM` 续引的写法解析不到、`aria-label` 这种带连字符的名字不构成锚点——折名字的规则在 `tools/doctest.mjs:51`（`tokOf`），"纯标点不算指认"那条判断在 `tools/doctest.mjs:122`（`shaped`）。它证的是"印出来的行号还在它说的那几行里"，不是"文档每句话都对"。破坏证据也只有台架内那一份：九把假引用（`tools/doctest.mjs:206`（`fakeCites`））加一把只在内存里把一条界内真引用挪歪一格的毒针（`tools/doctest.mjs:249`（`poisonNeedle`）），本仓的盘上台架仍然只有部署集那一套 X 刀。 | `test/repo.test.mjs:174-243` |
+| **不承诺浏览器闸的断言条数是被钉住的期望值** | 本轮两条腿都跑过：`bash tools/verify.sh` 五档 13/13/14/12/19 加 console、部署集双闸 29 条引用/4 张位图，全部 `fail: 0`，收尾 `=== ALL GREEN ===`、rc=0（这些是**那一跑的读数**，住在 `_tmp-fleet-ds-staircase-verify-full-r1.log`，不是仓里的期望值）。更要紧的是**源码里没有条数地板**：`verify.sh:117-121`（`rows`）只打印 `rows:` 与 `fail:`，`fail` 为空就退 0，node 侧 `verify.sh:80-84`（`test`）与 `package.json:13`（`unit`）都是 `test/*.test.mjs` 的 glob——把八个套件删掉三个，两道门照样全绿。本文件给的 13/13/14/12/19 与 104 都是**静态或本轮实测的读数**，不是被钉住的期望值。 | `tools/verify.sh:80-84`（`test`）、`tools/verify.sh:99`（`SCENARIOS`）、`tools/verify.sh:117-121`（`rows`）、`package.json:13`（`unit`）、`tools/harness.mjs:36-41`（`run`） |
+| **不承诺站点在线，也不承诺 Pages 前缀形态可用** | CI 的 browser job 只跑 root 形态，Pages workflow 只是拷文件、不测前缀 URL，本地服务只有一个 docroot 因而没有前缀模式可跑；本轮没做任何网络核对。仓内唯一相关记录是 `deliverable.md:185-199` 的 `fd0fe15`（主代理 2026-09-27 实抓的四个 200 与发布 sha `fd0fe15`），那是**转述**，不是本轮读数，也不是任何一道门。 | `.github/workflows/ci.yml:48-58`（`SKIP_UNIT`）、`.github/workflows/pages.yml:27-35`（`assemble`）、`server.cjs:49-55`（`startServer`）、`deliverable.md:185-199`（`fd0fe15`） |
+| **不承诺界面手感与美术** | 浏览器段只认三类证据：DOM id 齐不齐（`tools/playtest.mjs:200-201` 的 `getElementById`）、画布有没有真像素与被画过（`tools/playtest.mjs:209` 的 `geom`、`368-376`）、真事件之后状态与盘面变了没有（`tools/playtest.mjs:220-245` 的 `moves`）。类名、`aria-*`、CSS 观感、注释里的意图一概不是证据；`css/game.css:103-106` 的 `hidden` 那两条 `[hidden]` 规则之所以重要，只是因为它们决定事件会不会被盖住的卡片吃掉（`DESIGN.md:111` 的 `curtain`）。 | `tools/playtest.mjs:171-357`（`pointerScenario`）、`css/game.css:103-106,180`（`hidden`）、`DESIGN.md:111`（`curtain`） |
+| **不承诺 `par` 是"人类觉得难"，也不承诺难度梯子铺开** | `par` 是动作图上的最短操作数，仅此而已（`js/core/solve.js:97-129` 的 `solve`）；带是过滤器不是分布承诺，本轮出厂数据里 `twined` 八关全是 4（带定义 4-5）、`master` 七关全是 5（带定义 5-7），高半边一次没被碰到。本仓也没有 `tools/balance.mjs`、没有"单调性"断言、没有 p95/预算那一套定价；跨档之间唯一的单调证据是那张 `par-map` 直方图的最大值 `3/4/5/6/7`。 | `js/core/make.js:23-27`（`parMax`）、`js/core/solve.js:224-262`（`distanceMap`）、本轮 `npm run bake` 副本读数 |
+| **不承诺同一颗 seed 跨版本还是同一副牌，也不承诺存档会按题面作废** | seed→盘 是纯函数（本轮同 seed 连跑三次逐字相同，判定路径上没有随机数），但契约是"枚举顺序 + 那个 mixer"：`partitionsOf` 的字典序被 `test/make.test.mjs:152-156` 的 `partitionsOf` 钉住、`hashSeed('a')=723832900` 被 `test/make.test.mjs:16-27` 钉住，流水线一改版同一个 seed 就是另一张盘。而 `js/core/storage.js` 全文没有题面指纹字段（存档形状只有 `records/daily/unlocked/stats`，`js/core/storage.js:37-45` 的 `records`），旧成绩只会按 `lot.id` 找回来。装机时的对账只到"打印一句警告"这一层（`js/main.js:96-98` 的 `recheck`），`@boot` 那条 `recheck.agrees` 判的是**当前这一关**，不是存档。 | `js/core/partition.js:65-75`（`partitionsOf`）、`js/core/make.js:72-80`（`makeLotFromN`）、`js/core/storage.js:37-45`（`records`）、`js/main.js:96-98`（`recheck`） |
+| **不承诺每日题与随机题永远出得来** | `makeLotTrying` 40 次封顶，撞满就返回 `ok:false`（`js/core/make.js:91-97` 的 `makeLotTrying`）；`dailyLot`/`randomLot` 拿到 null 时装配层**静默回落**到 `ALL[0]`，标签照旧写着"每日梯 · 日期"（`js/core/library.js:53-66` 的 `dailyLot`、`js/main.js:64-73` 的 `ALL`）。本轮 8 个日期 8/8 出、master 档 20 颗 seed 20/20 出、最多 25 次尝试（离 40 还有余量），但没有任何一道门判这条回落。裸 `#/random` 写进 URL 的那段 token 来自 `Math.random()`（`js/main.js:254`），所以"分享链接必同盘"只对已经带 token 的链接成立。 | `js/core/make.js:91-97`（`makeLotTrying`）、`js/core/library.js:53-66`（`dailyLot`）、`js/main.js:64-73,254`（`random`）、本轮观测脚本 |
+| **不承诺 `n > 28` 会被拒绝** | `partitionsOf(n)` 对任何正整数都算得动（`js/core/partition.js:69-75` 的 `partitionsOf`），`MAX_N` 这类常量在发布前已被删除（`deliverable.md:201-204` 的 `MAX_N` 记录了这次删除）。"牌量上限 28"这件事由 `test/make.test.mjs:70`（`TIERS`）钉死的 `TIERS` ns 列表 `[6]/[10]/[15]/[21,28,12,18]` 保证——是**档位表没有更大的 n**，不是引擎会拒绝更大的 n。 | `js/core/partition.js:69-75`（`partitionsOf`）、`test/make.test.mjs:68-75`（`TIERS`）、`DESIGN.md:130`（`T_k`） |
+| **不承诺非三角数关卡的目标是唯一答案** | 12 / 18 张牌没有阶梯，目标取**该开局自己轨道上降序字典序最小**的那个周期成员（`js/core/deal.js:85-105` 的 `targetOf`、`js/core/partition.js:112-129` 的 `minPartition`）；同一轨道里其余成员同样合法，"这个目标比别的难"没有任何测量。门的强度只是：`attractor` 必须长成 `orbit(a,b)`、`cycleLen ≥ 2`（`test/library.test.mjs:69-83` 的 `attractor`），以及 `master` 档至少两关是反例且牌量只能是 12 或 18（`test/library.test.mjs:140-148` 的 `master`）。 | `js/core/deal.js:85-105`（`targetOf`）、`test/library.test.mjs:69-83`（`attractor`）、`test/library.test.mjs:140-148`（`master`） |
+| **不承诺任何计时上界** | 计时量与结构量分家的理由写在 `DESIGN.md:81-105`，而那张计时表的来源脚本没有入库（`deliverable.md:172-174`）。本轮同一台机器重测普遍更小（daily 平均 3.9 ms vs 表内 13 ms；`slowest par-proof` 196 ms vs 表内 311–533 ms），说明这些数随负载走。所以"点击时只做有界搜索"这条是真的（`js/core/game.js:91` 的 `maxStates` 20000 是个字面上界），"最坏 137 ms"那类话只能当某一次的读数。 | `DESIGN.md:81-105`、`js/core/game.js:88-96`（`hint`）、本轮观测脚本 |
+| **不承诺 `npm run electron` 能用** | 脚本在（`package.json:10` 的 `electron`），electron 却**不是**依赖（`package.json:32-33` 的 `dependencies` 两个 `{}`），`electron/main.cjs:1-4` 的 `dependency` 自己写明了这一点；本轮没跑过它。受支持的路径是 `npm run dev` / `npm start` / `bash tools/verify.sh`。 | `package.json:10`（`electron`）、`package.json:32-33`（`dependencies`）、`electron/main.cjs:1-4`（`dependency`）、`deliverable.md:175-176`（`electron`） |
+| **不承诺"引擎里没有时钟"** | 静态门只查 `window.` / `document.` / `localStorage`（`test/repo.test.mjs:57-70` 的 `localStorage`），没有禁 `Date`；`js/core/rng.js:44`（`Date`）有 `new Date()`（每日题的日期默认值），`js/core/storage.js:99`（`Date`）有 `Date.now()`（每日打卡的时刻）。这两个读数都不进 `par`/`steps` 的判定路径，但兄弟仓那句"引擎不许出现 `Date`"在本仓是假的，不要照抄。反过来 `js/core/` 里 `Math.random` 是 0 处（本轮 grep，唯一一处在 `js/main.js:254` 的 `Math.random`），不过这件事**也没有门**在管。 | `test/repo.test.mjs:57-70`（`localStorage`）、`js/core/rng.js:44`（`Date`）、`js/core/storage.js:99`（`Date`）、本轮 grep |
+| **不承诺关卡数量是 27** | 门是地板不是等号：`test/library.test.mjs:15` 的 `ALL` 与 `test/repo.test.mjs:154-156` 的 `rows` 都只要求 `≥ 24`。27 是本轮 bake 重烤并 `diff` 之后确认的当前出厂数（`wrote 27 lots (shoal:5 linked:7 twined:8 master:7)`），`master` 那一档本来想要 8 关、实际 7 关并在 stderr 里明说（`tools/bake.mjs:53` 的 `wanted`）。 | `test/library.test.mjs:15`（`ALL`）、`test/repo.test.mjs:154-156`（`rows`）、本轮副本 bake 输出 |
+| **不承诺文档全量对账**（这条腿只认它看得见的指认） | 它只读**反引号里**的 `文件:行号`，而且只认贴着引用写的那个名字：隔了半句的不算、写在正文里不带反引号的不算、`path:NN` 之后用 `：MM` 续引的写法解析不到、`aria-label` 这种带连字符的名字不构成锚点——折名字的规则在 `tools/doctest.mjs:51`（`tokOf`），"纯标点不算指认"那条判断在 `tools/doctest.mjs:122`（`shaped`）。它证的是"印出来的行号还在它说的那几行里"，不是"文档每句话都对"。破坏证据也只有台架内那一份：九把假引用（`tools/doctest.mjs:206`（`fakeCites`））加一把只在内存里把一条界内真引用挪歪一格的毒针（`tools/doctest.mjs:249`（`poisonNeedle`）），本仓的盘上台架仍然只有部署集那一套 X 刀。 | `test/repo.test.mjs:174-243`（`scan`） |
 
-License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test.mjs:142-148` 核对）。
+License: MIT（`LICENSE`，`Copyright (c) 2026 z-biz-game`，由 `test/repo.test.mjs:142-148` 的 `LICENSE` 核对）。
 
 ## 上线的到底是哪一批文件
 
