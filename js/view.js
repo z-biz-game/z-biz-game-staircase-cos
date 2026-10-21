@@ -62,11 +62,6 @@ export function createView(canvas, { onAction, onPick } = {}) {
   let flash = null; // { kind, left } — a refusal or a landed deal, counted down in seconds
   let hintAt = null; // { i, j, left }
   let raf = 0;
-  // ---- 减弱动效（prefers-reduced-motion）----
-  // 被指出的那张牌的描边环按 t = (now % 900) / 900 变粗变淡，是纯装饰。
-  // 减弱动效下把 t 钉在 0.5：环照画、牌照指，只停相位。
-  let reduceMotion = false;
-  const ringPhase = () => (reduceMotion ? 0.5 : (performance.now() % 900) / 900);
 
   let last = 0;
   let animClock = 0;   // 虚拟秒：只有它前进，画面才动；暂停时冻住
@@ -75,6 +70,15 @@ export function createView(canvas, { onAction, onPick } = {}) {
   let paused = false;
   let dirty = false;
 
+  // ---- 减弱动效（prefers-reduced-motion）----
+  // 一枚开关，两处读它：呼吸光环的相位（animClock 那一支）与光晕/阴影抬升。
+  // 初值直接读系统设置（media.matches），不是 false —— 玩家系统里开着减弱动效时，
+  // 第一帧就不该闪一下再停下来。
+  //
+  // 被指出的那张牌的描边环按 t = (animClock % 0.9) / 0.9 变粗变淡，是纯装饰；
+  // 减弱动效下把 t 钉在 0.3：环照画、牌照指，只停相位。
+  // 用 animClock（虚拟秒）而不是 performance.now（墙钟）：暂停时虚拟秒冻住，
+  // 环也跟着停；墙钟不冻，按住暂停键看环还在呼吸，是"暂停"这个词在骗人。
   const media = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   let reduceMotion = !!(media && media.matches);
   const tex = { felt: null, card: null, glow: null };
@@ -516,11 +520,14 @@ export function createView(canvas, { onAction, onPick } = {}) {
     },
     // The gate the runtime pref flip lands on: idempotent, and repaints so a player who
     // toggles the OS switch sees the ring settle on the same frame, not at the next hint.
-    setReduceMotion(v) {
-      const on = !!v;
-      if (on === reduceMotion) return reduceMotion;
-      reduceMotion = on;
-      if (reduceMotion) draw();
+    // 幂等：同一个值再来一次就直接返回，不重画（重画会把 hintLeft 这类倒计时也推一帧）。
+    // 变了就重画：开关来回拨时环的相位要立刻换边，而不是等下一帧。
+    setReducedMotion(on) {
+      const v = !!on;
+      if (v === reduceMotion) return reduceMotion;
+      reduceMotion = v;
+      dirty = true;
+      draw();
       return reduceMotion;
     },
     isReducedMotion: () => reduceMotion,
@@ -571,12 +578,6 @@ export function createView(canvas, { onAction, onPick } = {}) {
       dirty = true;
       draw();
       return paused;
-    },
-    setReducedMotion(on) {
-      reduceMotion = !!on;
-      dirty = true;
-      draw();
-      return reduceMotion;
     },
     // 对拍要读的就是这几个数：全部由 dt 积分而来，帧率换了它们也必须落在同一个虚拟秒上。
     clock() {

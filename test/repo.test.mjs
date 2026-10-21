@@ -4,6 +4,7 @@
 // could otherwise make in a README without anything checking it.
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

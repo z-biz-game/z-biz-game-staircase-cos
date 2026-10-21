@@ -74,9 +74,14 @@ function applyReducedMotion(on) {
   view.setReducedMotion(REDUCED_MOTION);
   return REDUCED_MOTION;
 }
-// 系统中途改设置也要跟上。
-if (reduceMotionQuery && reduceMotionQuery.addEventListener) {
-  reduceMotionQuery.addEventListener('change', (ev) => applyReducedMotion(ev.matches));
+// 系统中途改设置也要跟上。addEventListener 是标准接口，老 Safari 只有 addListener
+// —— 特性探测，不做 UA 判断（UA 字符串随时会改）。
+if (reduceMotionQuery) {
+  if (typeof reduceMotionQuery.addEventListener === 'function') {
+    reduceMotionQuery.addEventListener('change', (ev) => applyReducedMotion(ev.matches));
+  } else if (typeof reduceMotionQuery.addListener === 'function') {
+    reduceMotionQuery.addListener((ev) => applyReducedMotion(ev.matches));
+  }
 }
 
 function clampIndex(n) {
@@ -406,25 +411,61 @@ function toggleSound() {
 }
 el.sound.addEventListener('click', toggleSound);
 
-function toggleFullscreen() {
+// 全屏：只做特性检测，不嗅探 UA（iOS Safari 是 webkitRequestFullscreen，
+// 老 Edge 是 ms 前缀，而 UA 字符串随时会改）。
+// 查得出能力就进出，查不出就把按钮灰掉并把原因写进 title——不解释的禁用等于这功能没做完。
+function fullscreenApi() {
   const doc = document;
   const node = doc.documentElement;
-  if (!doc.fullscreenElement) {
-    const req = node.requestFullscreen || node.webkitRequestFullscreen;
-    if (!req) { toast('这台设备不支持全屏'); return false; }
-    const p = req.call(node);
-    if (p && p.catch) p.catch(() => toast('全屏被拒绝'));
-  } else if (doc.exitFullscreen || doc.webkitExitFullscreen) {
-    (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
+  return {
+    req: node.requestFullscreen || node.webkitRequestFullscreen || node.msRequestFullscreen,
+    exit: doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen,
+    current: doc.fullscreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement || null,
+  };
+}
+
+function markFullscreenUnsupported() {
+  el.full.disabled = true;
+  el.full.title = '这个浏览器不提供元素全屏（iOS Safari 请用「添加到主屏幕」独立打开）';
+}
+
+function toggleFullscreen() {
+  const { req, exit, current } = fullscreenApi();
+  if (!current) {
+    if (!req) {
+      markFullscreenUnsupported();
+      toast('这台设备不支持全屏');
+      return false;
+    }
+    // fullscreen 返回 Promise，被拒时必须吃掉：iOS Safari 对多数非 video 元素直接拒绝，
+    // 让这个 rejection 冒泡出去会变成一条未捕获错误，整局游戏跟着挂。
+    try {
+      const p = req.call(document.documentElement);
+      if (p && p.catch) p.catch(() => { markFullscreenUnsupported(); toast('全屏被拒绝'); });
+    } catch (e) {
+      markFullscreenUnsupported();
+      toast('全屏被拒绝');
+    }
+  } else if (exit) {
+    try {
+      const p = exit.call(document);
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) {
+      // 退出失败不致命：下一次 fullscreenchange 会把状态拉回来。
+    }
   }
   return app.fullscreen;
 }
 el.full.addEventListener('click', toggleFullscreen);
-document.addEventListener('fullscreenchange', () => {
-  app.fullscreen = !!document.fullscreenElement;
+// Esc 与系统手势退出都不经过我们的代码，按钮状态只能靠 fullscreenchange 回写，
+// 否则用户已经退出、HUD 还停在「全屏」，下一次点击反而会重新进全屏。
+function syncFullscreen() {
+  app.fullscreen = !!fullscreenApi().current;
   el.full.setAttribute('aria-pressed', String(app.fullscreen));
   view.measure();
-});
+}
+document.addEventListener('fullscreenchange', syncFullscreen);
+document.addEventListener('webkitfullscreenchange', syncFullscreen);
 
 function showHelp(on) {
   const want = on === undefined ? !app.helpOpen : !!on;
@@ -466,7 +507,8 @@ window.addEventListener('keydown', (ev) => {
   if (k === '?' || k === '/') { ev.preventDefault(); showHelp(true); return; }
   if (k === 'p') { ev.preventDefault(); setPaused(); return; }
   if (k === 'm') { ev.preventDefault(); toggleSound(); return; }
-  if (k === 'f') { ev.preventDefault(); toggleFullscreen(); return; }
+  // F：全屏。按住不放不该连着切进切出，所以 repeat 这一路不认。
+  if (k === 'f') { if (ev.repeat) return; ev.preventDefault(); toggleFullscreen(); return; }
   if (k === 'u') { el.undo.click(); return; }
   if (k === 'h') { el.hint.click(); return; }
   if (k === 'r') { el.restart.click(); return; }
@@ -587,95 +629,13 @@ window.stair = window.staircase = {
   store,
 };
 
-// ---- 全屏开关（#btn-fullscreen）----
-// 绑的是本页 HUD 上真实存在的那个按钮。全屏最常见的假实现就是引用一个并不存在的
-// id：点下去什么也不会发生，量具却算它"已实现"。所以这里找不到按钮就直接不装。
-(function bindFullscreen() {
-  const btn = document.getElementById('btn-fullscreen');
-  if (!btn) return;
-  const root = document.documentElement;
-  // 只做特性检测，不嗅探 UA：iOS Safari 是 webkitRequestFullscreen，老 Edge 是 ms 前缀，
-  // 而 UA 字符串随时会改。"有没有这个能力"是查出来的，不是猜出来的。
-  const req = root.requestFullscreen || root.webkitRequestFullscreen || root.msRequestFullscreen;
-  const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-  const current = () => document.fullscreenElement || document.webkitFullscreenElement
-    || document.msFullscreenElement || null;
-
-  // 不支持也要给个说法：只把按钮灰掉而不解释，玩家会以为这功能没做完。
-  // supported 这枚标记不能省：下面 sync() 每次都会重写 title，不挡住的话，装的时候刚写
-  // 进去的人话原因会被随后的 sync() 立刻抹成"全屏 (F)"——禁用就变成一句没有理由的禁用。
-  let supported = !!req;
-  const unsupported = () => {
-    supported = false;
-    btn.disabled = true;
-    btn.title = '这个浏览器不提供元素全屏（iOS Safari 请用「添加到主屏幕」独立打开）';
-  };
-  if (!req) unsupported();
-
-  // fullscreen 返回 Promise，被拒时必须吃掉：iOS Safari 对多数非 video 元素直接拒绝，
-  // 让这个 rejection 冒泡出去会变成一条未捕获错误，整局游戏跟着挂。
-  const settle = (p) => { if (p && p.catch) p.catch(unsupported); };
-
-  // 进出都能走：已经全屏时这次调用是退出，不是"再进一次"。
-  function toggle() {
-    try {
-      if (current()) {
-        if (exit) settle(exit.call(document));
-      } else if (req) {
-        settle(req.call(root));
-      } else {
-        unsupported();
-      }
-    } catch (e) {
-      unsupported();
-    }
-  }
-
-  // Esc 和系统手势退出都不经过我们的代码，按钮状态只能靠 fullscreenchange 回写，
-  // 否则用户已经退出、HUD 还停在"退出全屏"，下一次点击反而会重新进全屏。
-  function sync() {
-    const on = !!current();
-    btn.setAttribute('aria-pressed', String(on));
-    btn.textContent = on ? "退出全屏" : "全屏";
-    if (supported) btn.title = "全屏" + '（F）';
-    const body = document.body;
-    if (body && body.classList) body.classList.toggle('fullscreen', on);
-  }
-
-  btn.addEventListener('click', toggle);
-  window.addEventListener('keydown', (ev) => {
-    if (ev.key !== 'f' && ev.key !== 'F') return;
-    const t = ev.target;
-    // 盘号 / 种子这类输入框里打字不能触发全屏，否则玩家输 seed 输到一半屏幕没了。
-    if (t && /input|textarea|select/i.test(t.tagName || '')) return;
-    if (ev.repeat || ev.metaKey || ev.ctrlKey || ev.altKey) return;
-    ev.preventDefault();
-    toggle();
-  });
-  window.addEventListener('fullscreenchange', sync);
-  window.addEventListener('webkitfullscreenchange', sync);
-  window.addEventListener('MSFullscreenChange', sync);
-  sync();
-})();
-
-// ---- 减弱动效（prefers-reduced-motion）----
+// ---- 减弱动效（prefers-reduced-motion）：对外的钩子 ----
 //
-// 跟住系统设置，而且**运行中改设置要立刻生效**：只读一次 matchMedia 不够，玩家在系统里
-// 把开关拨回来，页面还停在上一次读到的答案上。addEventListener 是标准接口，老 Safari 只有
-// addListener —— 特性探测，不做 UA 判断。
-const motionQuery = typeof matchMedia === 'function'
-  ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-function applyReduceMotion(on) { view.setReduceMotion(on); }
-if (motionQuery) {
-  applyReduceMotion(motionQuery.matches);
-  if (typeof motionQuery.addEventListener === 'function') {
-    motionQuery.addEventListener('change', (e) => applyReduceMotion(e.matches));
-  } else if (typeof motionQuery.addListener === 'function') {
-    motionQuery.addListener((e) => applyReduceMotion(e.matches));
-  }
-}
+// 运行时钩子：让量具与手工测试能直接拨这枚开关，而不必去改系统设置。
+// 走的是上面那一个 applyReducedMotion —— 同一个开关只有一条路，
+// 不然「系统设置」与「钩子」两条路会各自改一份状态。
 const __rmHook = window.staircase;
 if (__rmHook && typeof __rmHook === 'object') {
-  __rmHook.setReduceMotion = applyReduceMotion;
+  __rmHook.setReducedMotion = applyReducedMotion;
   __rmHook.isReducedMotion = () => view.isReducedMotion();
 }
