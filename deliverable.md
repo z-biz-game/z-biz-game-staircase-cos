@@ -1,209 +1,408 @@
 # 保加利亚梯 - 交付报告
 
-## 摘要
-
 | 字段 | 值 |
 | --- | --- |
 | **App 名称** | 保加利亚梯 |
 | 英文名 / 仓名 | BULGARIAN · `z-biz-game-staircase-cos` |
+| 基线 → 本次 | 并线后 `10f347f` → 修复 `64bef0e` + `aed596c` + 本文件这一笔 |
 | 玩法一句话 | 每次从每堆各拿走一张、把拿走的聚成新一堆（新堆 = 发牌前的堆数，空堆消失）；牌数是三角数 `T_k` 时任何开局都必然走到阶梯 `(k,k-1,…,1)`，玩家另外可以并两堆或拆一堆，用最少操作摆出目标形状 |
-| 难度数字的来源 | `par` = `js/core/solve.js` 在 `p(n)` 个局面的动作图（发/并/拆）上做广度优先搜索量出的最短操作数；`steps` = 只发牌时到目标的发牌次数（定理的量）。两者都在构建期从序列化 `spec` 复算，对不上就构建失败 |
-| 对外锚点（全部复现） | 三角数牌量全分拆收敛 `stuck = 0,0,0,0`（n=3/6/10/15，另 21/28 也是 0）；分拆数 `3 / 11 / 42 / 176 / 77 / 792 / 3718`；最坏只发牌步数 `2 / 6 / 12 / 20 / 30 / 42 = k(k-1)`；反面 `n=12` 的 77 个开局全部进入长度 5 的周期轨道（`other = 0`） |
-| 出厂关卡 | 27 关（shoal 5 · linked 7 · twined 8 · master 7），四档 par 带 2-3 / 3-4 / 4-4 / 5-5 |
 | 依赖数 | 0（`dependencies` 与 `devDependencies` 都是 `{}`，无打包器、无 npm install） |
-| 二进制资产 | 0（无 png/mp3/字体；favicon 是 index.html 里内联 SVG data-URI；画面全部 canvas 2D 程序绘制） |
-| node 层断言 | 111 行（8 个套件），fail 0 |
-| 浏览器层断言 | 71 行（@boot @play @routes @save @pointer），fail 0，console 干净 |
+| node 层断言 | 148 条（11 个套件），fail 0 |
+| 浏览器层断言 | 72 条（`@boot @play @routes @save @pointer` 五档），fail 0，console 干净 |
+| 部署集闸 | 41 条引用（含 5 张位图尺寸核对）/ 69 条断言，fail 0；台架 `DS_SELFTEST rc=0` |
 | 测试钩子 | `window.stair`（同时挂 `window.staircase` 别名） |
 | 路由 | `#/c/<n>` · `#/lot/<id>` · `#/daily`（`hashSeed("YYYY-MM-DD")`） · `#/random/<band>/<token>` |
 
-## 文件清单与验证者
+## 0. 一句话
 
-| 文件 | 作用 | 由谁验证 |
+并线（`864146f`）把两侧内容按"重叠块取较新权威"合到一起，在这仓留下六处互相打架的接线，
+其中第一处是**整局级**的：`js/view.js` 里 `let reduceMotion` 被声明了两次，
+ES module 里同名顶层声明是 SyntaxError ⇒ 模块根本不加载 ⇒ `js/main.js` 的 import 一起炸
+⇒ 页面上一行都不跑。
+这次修的还不止并线带进来的：浏览器闸的 `@pointer` 段在**并线前就已经是红的**——
+第一次打开摊开的玩法说明盖住盘面，第一根合成手指点空、把说明关掉了，
+于是"鼠标能不能把认证路线走完"这条腿实际什么都没量。
+本次逐处归因并修掉，**没有删任何功能**：删的全是并线拼出来的重复实现
+（两套 setter、两套全屏、两套动效监听、重复的 manifest link、重复的 service worker 注册），
+并线弄丢的那几块（清单里更全的元信息、sw.js 的 SHELL 预缓存、文档的 25 处行号）都补回来了。
+
+## 1. `js/view.js`：`let reduceMotion` 声明了两次 ⇒ SyntaxError ⇒ 整局不可玩
+
+**旧代码错在哪**
+
+并线后的 `js/view.js` 同时留着两处声明：
+
+```js
+  let reduceMotion = false;                                  // 68 行（远端侧那份）
+  const ringPhase = () => (reduceMotion ? 0.5 : (performance.now() % 900) / 900);
+  ...
+  let reduceMotion = !!(media && media.matches);            // 79 行（本地侧那份）
+```
+
+ES module 的顶层是模块作用域，同名 `let` 声明两次是 **SyntaxError**（不是运行期错误），
+解析阶段就失败 ⇒ `js/view.js` 永远不会被求值 ⇒ `js/main.js` 里的
+`import { createView } from './view.js'` 一起失败 ⇒ 整局不可玩。
+
+把并线后的文件原样复制成 `.mjs` 再 `node --check`，它自己这么说：
+
+```
+/private/tmp/_stair_view_head.mjs:79
+  let reduceMotion = !!(media && media.matches);
+      ^
+SyntaxError: Identifier 'reduceMotion' has already been declared
+```
+
+**新代码为什么对**
+
+只留一处声明，初值直接读 `matchMedia('(prefers-reduced-motion: reduce)')` 的 `matches`，
+不是 `false`：玩家系统里开着减弱动效时，第一帧就不该闪一下再停下来。
+同时把被指出的那张牌的描边环相位从 `performance.now()`（墙钟）换成 `animClock`（虚拟秒）：
+
+```js
+const t = reduceMotion ? 0.3 : (animClock % 0.9) / 0.9;
+```
+
+墙钟不冻，按住暂停键看环还在呼吸，是"暂停"这个词在骗人；虚拟秒冻住，环也跟着停。
+原先那个 `ringPhase` 辅助函数在并线后已经是死代码（画环的地方直接算的），一并删掉。
+对外只留一个 setter，名字取闸调的那个（`js/view.js:525-532` 的 `setReducedMotion`），
+`test/view.test.mjs:159`（`setReducedMotion`）那条"reduceMotion 是真的分支"因此恢复绿。
+
+## 2. 两套全屏接线叠在一起
+
+**旧代码错在哪**
+
+并线后 `js/main.js` 同时有两套全屏：
+
+* 本地侧 `toggleFullscreen()` + `#fullscreen` 按钮；
+* 远端侧 `bindFullscreen()` IIFE + `#btn-fullscreen` 按钮。
+
+`index.html` 里两个按钮**都在**（80 行与 85 行），同一次点击走两条路；
+远端那套还自己注册了一个 `keydown` 监听，于是按 F 键会**连着切两次**（进全屏再退出）。
+
+**新代码为什么对**
+
+能力取两边并集，只留一条接线：
+
+* `js/main.js:417-425`（`fullscreenApi`）一次问清 `requestFullscreen` / `webkitRequestFullscreen` /
+  `msRequestFullscreen` 与三个 `exit*`、三个 `fullscreenElement`；
+* 查得出能力就进出，查不出就按 `js/main.js:427-430`（`markFullscreenUnsupported`）
+  把按钮灰掉并把原因写进 `title`（不解释的禁用等于这功能没做完）；
+* `requestFullscreen` 返回 Promise，iOS Safari 对多数非 video 元素直接拒绝，
+  这个 rejection 必须吃掉，否则冒泡成未捕获错误、整局游戏跟着挂；
+* Esc 与系统手势退出都不经过我们的代码，按钮状态只能靠 `fullscreenchange` 回写
+  （否则用户已经退出、HUD 还停在「全屏」，下一次点击反而会重新进全屏）；
+* 接线只绑 `#fullscreen`（`aria-pressed` 有 CSS 画按下态），重复入口 `#btn-fullscreen` 删掉。
+
+F 键补 `ev.repeat` 守卫：按住不放不该连着切进切出。
+
+## 3. 两套减弱动效路径 + 两个 setter 名字
+
+**旧代码错在哪**
+
+并线后 `js/main.js` 里 `applyReducedMotion`（本地侧）与 `motionQuery` / `applyReduceMotion`（远端侧）
+各改各的状态；`js/view.js` 上同时挂着 `setReduceMotion` 与 `setReducedMotion` 两个 setter。
+活下来的 `test/view.test.mjs` 调的是 **`setReducedMotion`**，删错那个就报
+`view.setReducedMotion is not a function`。
+
+**新代码为什么对**
+
+合成一条路：系统设置（`matchMedia` 的 change 事件，老 Safari 走 `addListener` 回落）→
+`js/main.js:72-76`（`applyReducedMotion`）→ `view.setReducedMotion` → 视图里那一个 `reduceMotion` 变量；
+对外的运行时钩子也只留一份（`js/main.js:637-640` 的 `__rmHook`）。
+视图上的 setter 幂等（同一个值再来一次直接返回，不重画——重画会把 `hintLeft` 这类倒计时也推一帧），
+变了就重画：开关来回拨时环的相位要立刻换边，而不是等下一帧。
+
+## 4. `sw.js` 整份取了远端侧那版
+
+**旧代码错在哪**
+
+并线把 `sw.js` 换成了远端侧那版（`VERSION='staircase-cos-v1'`、只预缓存 `index.html` 与
+`manifest.webmanifest`、没有导航兜底），而活下来的 `test/pwa.test.mjs` 是照**本地**那版写的
+（`sw.js:9-10` 的 `VERSION` 与 `SHELL` 预缓存 `./`、`./index.html`、`./manifest.webmanifest`、
+`./css/game.css`、`./js/main.js`，外加"没有缓存时导航回落到 shell"那一条）。
+
+**新代码为什么对**
+
+闸是行为裁决者：`sw.js` 还原成本地那版。`test/pwa.test.mjs` 十条断言回到全绿
+（并线后基线上这一条本来就是红的）。
+
+## 5. `test/repo.test.mjs`：并线加了测试体却没并进 import
+
+**旧代码错在哪**
+
+并线在 `test/repo.test.mjs` 里加了一条"生成器逐字节重画每一张图"的用例，用到 `spawnSync`，
+却没把 `import { spawnSync } from 'node:child_process'` 并进来 ⇒ 这条用例直接抛
+`spawnSync is not defined`，整条腿红。
+
+**新代码为什么对**
+
+补上那一行（`test/repo.test.mjs:7` 的 `spawnSync`，node 标准库，仓里仍然零依赖）。
+注意：加 import 会让这个文件其后的行号整体 +1，所以 README 里引它的 12 处 `文件:行号`
+要跟着重钉（见第 7 节）。
+
+## 6. `manifest.webmanifest` 与 `index.html` 的 `<head>`：两套合同叠在一起
+
+**旧代码错在哪**
+
+并线把清单换成了远端侧那版：四个图标**全部**以 base64 内联（清单 300 kB 起），
+而活下来的 `test/repo.test.mjs` 要求清单里的图标**在盘上**且 `sizes` 等于 IHDR 真宽高
+（`ok(existsSync(join(root, icon.src)))` + `eq(icon.sizes, ${w}x${h})`）⇒ 那条腿红。
+
+远端那版清单还丢掉了本地那版更全的东西：`id` / `lang` / `dir` / `scope` / `display_override` /
+`orientation` / `categories` / `shortcuts`，以及 `maskable 512` 与 `1024` 母本两档图标。
+
+同一时刻 `index.html` 的 `<head>` 被并线拼成**两份**：两个 `<link rel="manifest">`、
+两套 og/twitter 元信息 ⇒ `deploy-set` 的 H 段数出 26 个 head 标签，而它钉住的是 14。
+
+**新代码为什么对**
+
+* 清单还原成本地那版（文件图标，`manifest.webmanifest:16-21` 的 `icons`）。
+  理由有三条：仓里物理上就带着那 12 张 PNG（`icons/`）与 4 张美术图（`assets/art/`），
+  还有 `assets/gen/gen_art.py` 能把它们逐字节重画出来；`js/view.js` 按路径加载
+  felt/cardback/glow 三张贴图；活下来的门禁就是"图标在盘上"这一条。
+  远端那版的内联清单是为它自己那套"零二进制资产"的承诺准备的，本仓并不作那个承诺。
+  `deploy-set` 的 P 段对**文件图标与内联位图读的是同一段 IHDR**，强度不减。
+* `<head>` 去重成一份：留本地那版的 PNG favicon（16/32/48/64/96 + apple-touch-icon）
+  与远端那版的内联 SVG favicon（它是零依赖的一枚图标，先于 PNG 生效），
+  og/twitter 元信息各留一份（`index.html:10-26` 的 `og:image`）。
+* `og:image` 改成**绝对 URL**：抓取器读的是别人页面上的字符串，不会替 Pages 补 `/<slug>/` 前缀，
+  相对写法在别人眼里就是一张 404 的卡片。`deploy-set` 的 R7 就是量这一句，
+  而它的前缀来源是 README 里那份部署前缀声明——本仓原先**没有**这份声明，
+  于是 R7 连"前缀是什么"都不知道。本次在 README 第七节补上唯一的那一份。
+* 顺带把仓里已有却没声明的 `favicon-48` / `favicon-64` 两档补进 `<head>`。
+* 顺带收回**重复的 service worker 注册**：并线从远端侧搬来一个经典脚本 `js/sw-register.js`，
+  `index.html` 里多一条 `<script src="js/sw-register.js">`，它自己也 register 一次；
+  而 `js/main.js` 早已从 `./pwa.js` 调 `registerServiceWorker()`（带 `navigator.serviceWorker === null`
+  与 `file://` 守卫，scope 按页面 URL 算，Pages 子路径下也对）。
+  同一份脚本注册两遍，浏览器只会保留一个 registration，但那是两套并行的守卫与两处会各自
+  报错的代码。留 `pwa.js` 那一套（有测试照着它写），删 `sw-register.js` 与那条 script 标签。
+
+## 7. 文档行号：25 处引用全部漂了
+
+**旧代码错在哪**
+
+并线换掉了被引用的那些文件（`js/main.js`、`js/core/storage.js`、`server.cjs`、
+`electron/main.cjs`、`tools/harness.mjs`、`css/game.css`、`test/repo.test.mjs`），
+README 里 25 处 `文件:行号` 全部指错：4 处漂出文件末尾，40 处带着指认的引用落到了隔壁一行。
+这就是仓里那条文档腿报的：
+
+```
+FAIL every `path:NN` citation in the docs points at a real file and stays inside it
+       4/251 条引用不在盘上、同名不唯一或漂出文件末尾
+FAIL the name glued to a citation really appears in the lines it points at
+       40/244 条带指认的引用漂到了隔壁一行
+```
+
+**新代码为什么对**
+
+逐条重钉到当前树上真的那几行（改的是**钉**，不是闸的断言强度）：
+
+| 旧引用（并线前那一侧的行号） | 新引用 | 指认 |
 | --- | --- | --- |
-| `js/core/partition.js` | 状态=整数分拆；`key()` 规范化；枚举 + Euler 五边形数递推两条路算 `p(n)` | `node test/partition.test.mjs`（14 行，含公开分拆表逐点对账） |
-| `js/core/deal.js` | 发牌规则（堆列表写法 + 重数向量写法两份实现）、轨道、收敛穷举、轨道普查、目标形状 | `node test/deal.test.mjs`（16 行） |
-| `js/core/solve.js` | 唯一合法性闸门 `applyAction`、分层 BFS `solve`、显式边表 `buildGraph`、三路对账 `parProof`、全量难度图 `distanceMap`、`replay` | `node test/solve.test.mjs`（17 行，含手算 fixture 与"没有更短"反证） |
-| `js/core/game.js` | 一局状态机：act/undo/reset/select/hint/grade/snapshot | `node test/game.test.mjs`（12 行，含"每个出厂关卡都能用 act() 走完认证路线"） |
-| `js/core/make.js` | 出题：种子→分拆下标→`rateLot`（难度带 + 拒绝原因）、四档 `TIERS` | `node test/make.test.mjs`（13 行） |
-| `js/core/library.js` | 战役表读取、`#/daily`/`#/random` 运行时生成、`reSolve`、`stats` | `node test/library.test.mjs`（12 行）+ `@routes` 段现场比对 |
-| `js/core/storage.js` | 存档：守卫式 localStorage（**抛异常**）+ 内存后端 + 单调 best/unlock | `node test/storage.test.mjs`（8 行）+ `@save` 段真实 localStorage |
-| `js/core/rng.js` | `hashSeed`（FNV-1a 派生两轮 UTF-16 混合）+ `mulberry32`，与 gridlock-cos 逐字节相同 | `node test/make.test.mjs` 里 4 行 rng 断言（自洽值，不声称公开向量） |
-| `js/data/lots.js` | 构建期产物：27 关，每行带 `spec/par/steps/path/attractor` | `node test/library.test.mjs` 从序列化 `spec` 重解 + `node tools/bake.mjs` 写入门禁 |
-| `js/view.js` | canvas 2D 程序绘制牌堆/目标条/发牌块 + 点击与拖拽手势（不判合法性） | `@pointer` 段 19 行真实 CDP 鼠标事件 |
-| `js/main.js` | DOM、路由、存档接线、`window.stair` 钩子 | `@boot @play @routes @save` 五段 + `bash tools/verify.sh` |
-| `index.html` | 外壳、内联 SVG data-URI favicon、"数字从哪来"面板 | `@boot` 的"控制台零噪声"路径：`tools/verify.sh` 的 console 段（实测 `(none)`） |
-| `css/game.css` | 版式；`.curtain[hidden]`/`.toast[hidden]` 两条防吞事件规则 | `@pointer` 段（去掉这两条会立刻挂 9 行，见改动表） |
-| `tools/bake.mjs` | 出题 + 门禁 + 打印穷举证据表 | `node tools/bake.mjs`（本报告"数字从哪来"就是它这次的输出） |
-| `tools/harness.mjs` | node 与浏览器同形状的断言行 | `bash tools/verify.sh` 聚合行 |
-| `tools/playtest.mjs` | 零依赖 CDP 驱动（Node 全局 fetch/WebSocket） | `bash tools/verify.sh` 的 `@*` 五段 |
-| `tools/verify.sh` | 一次性验收门（web 5212 / CDP 9353，独立 Chrome profile，SKIP_UNIT） | `bash tools/verify.sh` → `=== ALL GREEN ===` |
-| `test/*.test.mjs`（8 个文件） | 111 行 node 断言 | `node --test test/`（8 tests / pass 8 / fail 0）与 `npm run unit` |
-| `test/repo.test.mjs` | 仓本身作为门禁：零依赖、无二进制资产、core 纯度、favicon 是内联 SVG、CI 文件集 == `npm run check` 文件集、pages 只拷 index.html/css/js、端口 5212/9353、README 与交付报告同名、三份文档里每条行号引用与它的指认逐条对账 | `node test/repo.test.mjs`（19 行） |
-| `package.json` | 零依赖 + `check/unit/test/bake/verify` 脚本 | `npm run check`、`npm test`、`node test/repo.test.mjs` |
-| `server.cjs` / `electron/main.cjs` | 零依赖静态服务器（ES module 需要 origin）与桌面壳 | `bash tools/verify.sh` 全程通过它提供页面；`npm run check` 语法；`node test/repo.test.mjs` 的 `main` 字段一行 |
-| `.github/workflows/ci.yml` | unit（`node --check` 全量 + 每个 test 文件）+ browser（`SKIP_UNIT=1`） | `node test/repo.test.mjs` 断言它的 glob 集合与 `npm run check` 完全一致 |
-| `.github/workflows/pages.yml` | 只 `cp index.html css js` 的部署 | `node test/repo.test.mjs`（禁止 `path: .`，禁止把 tools/test/server 带进产物） |
-| `LICENSE` / `.gitignore` | MIT + "Copyright (c) 2026 z-biz-game"；忽略 node_modules 与 _site | `node test/repo.test.mjs` |
-| `README.md` / `DESIGN.md` / `deliverable.md` | 玩法与数字复现 / 维护者向约束与实测 / 本报告 | `node test/repo.test.mjs` 的显示名一致性一行；README 的复现命令是 `node tools/bake.mjs`；DESIGN 第 6 节的计时表来自 `node /tmp/stair-bench.mjs` 那一次实测（脚本未入库，数字为一次性实测，见未实现清单） |
+| `js/main.js` 187-202 行 | `js/main.js:225-247` | commit |
+| `js/main.js` 64-73 行 | `js/main.js:101-117` | resolve / ALL |
+| `js/main.js` 254 行 | `js/main.js:300` | `Math.random` |
+| `js/main.js` 96-98 行 | `js/main.js:132-135` | recheck |
+| `js/core/storage.js` 37-45 行 | `js/core/storage.js:57-65` | records |
+| `js/core/storage.js` 99 行 | `js/core/storage.js:208` | `Date.now()` |
+| `server.cjs` 60 行 | `server.cjs:63` | PORT |
+| `electron/main.cjs` 9 行 | `electron/main.cjs:15-16` | port |
+| `tools/harness.mjs` 36-41 行 | `tools/harness.mjs:49-55` | run |
+| `css/game.css` 103-106、180 行 | `css/game.css:114-117,190` | hidden |
+| `test/repo.test.mjs` 29-37 行 | `test/repo.test.mjs:40-47` | dependencies |
+| `test/repo.test.mjs` 39-46 行 | `test/repo.test.mjs:50-60` | BANNED |
+| `test/repo.test.mjs` 48-55 行 | `test/repo.test.mjs:195-203` | favicon |
+| `test/repo.test.mjs` 57-70 行 | `test/repo.test.mjs:206-222` | localStorage |
+| `test/repo.test.mjs` 72-81 行 | `test/repo.test.mjs:225-233` | view |
+| `test/repo.test.mjs` 83-105 行 | `test/repo.test.mjs:236-256` | Syntax |
+| `test/repo.test.mjs` 107-114 行 | `test/repo.test.mjs:259-265` | pages |
+| `test/repo.test.mjs` 116-130 行 | `test/repo.test.mjs:268-281` | CDP_PORT |
+| `test/repo.test.mjs` 120-122 行 | `test/repo.test.mjs:273` | wait |
+| `test/repo.test.mjs` 132-140 行 | `test/repo.test.mjs:284-291` | BULGARIAN |
+| `test/repo.test.mjs` 142-148 行 | `test/repo.test.mjs:294-299` | LICENSE |
+| `test/repo.test.mjs` 154-156 行 | `test/repo.test.mjs:307-308` | rows |
+| `test/repo.test.mjs` 174-243 行 | `test/repo.test.mjs:316-351` | scan |
 
-## 数字从哪来
+README 里另外几处现在也说了假话，一并改成真的：
 
-`node tools/bake.mjs`（2026-09-27 本仓最后一次实跑，原样粘贴）：
+* 「零图片素材」「无二进制资产」——本仓有 16 张 PNG，全部可由 `assets/gen/gen_art.py` 逐字节重画；
+* favicon 契约——原先写"必须是内联 `data:image/svg+xml,`"，实际门禁要的是**真的 PNG 文件**；
+* 第五节那张目录表（行数/字节数）、出货产物文件数（13 → 37）、node 断言条数（111 → 148）、
+  套件数（8 → 11）、语法门扫到的文件数（27 → 33）；
+* `node --test test/` 这个写法在本机 node 22.22.3 上**跑不起来**（它把 `test/` 当模块解析，
+  报 `Cannot find module '.../test'`），能跑的是 `node --test test/*.test.mjs`（11 pass / 0 fail）；
+* 部署集闸那三对常量随并线后的产物重钉：`EXPECT_CHECKS` 29→41、`EXPECT_ROWS` 53→69、
+  `EXPECT_HEAD_TAGS` 14→24（`tools/deploy-set.mjs:38` 的 `EXPECT_CHECKS`）。
 
-```
-shoal: 5 lots in 0.0s (par 2-3 · 只发牌 3-5)
-linked: 7 lots in 0.0s (par 3-4 · 只发牌 4-10)
-twined: 8 lots in 0.0s (par 4-4 · 只发牌 5-13)
-note: master reached 7/8 (only so many openings clear the band)
-master: 7 lots in 0.2s (par 5-5 · 只发牌 5-37)
+## 8. 浏览器闸的 `@pointer` 段：并线前就已经是红的
 
-wrote 27 lots (shoal:5 linked:7 twined:8 master:7) -> js/data/lots.js
-tries 293 accepted 27 rate 9.2%
-rejections: 开局即目标=3 一步内的题=40 重复局面=10 par 2 不在带内=100 par 3 不在带内=81 par 4 不在带内=32
-max BFS states 1692 · slowest par-proof 533ms · total 1.4s
-proof converge n=3 k=2: 3/3 openings reach the staircase, worst 2 = k(k-1) from 1,1,1
-proof converge n=6 k=3: 11/11 openings reach the staircase, worst 6 = k(k-1) from 2,2,1,1
-proof converge n=10 k=4: 42/42 openings reach the staircase, worst 12 = k(k-1) from 3,3,2,1,1
-proof converge n=15 k=5: 176/176 openings reach the staircase, worst 20 = k(k-1) from 4,4,3,2,1,1
-proof converge n=21 k=6: 792/792 openings reach the staircase, worst 30 = k(k-1) from 5,5,4,3,2,1,1
-proof converge n=28 k=7: 3718/3718 openings reach the staircase, worst 42 = k(k-1) from 6,6,5,4,3,2,1,1
-proof par-map n=6: 11 positions / 42 actions · max par 3 from 1,1,1,1,1,1 · hist [[0,1],[1,5],[2,4],[3,1]]
-proof par-map n=10: 42 positions / 266 actions · max par 4 from 1,1,1,1,1,1,1,1,1,1 · hist [[0,1],[1,10],[2,19],[3,11],[4,1]]
-proof par-map n=15: 176 positions / 1645 actions · max par 5 from 2,2,2,2,2,2,2,1 · hist [[0,1],[1,16],[2,57],[3,72],[4,28],[5,2]]
-proof par-map n=21: 792 positions / 10225 actions · max par 6 from 2,2,2,2,2,2,2,2,2,2,1 · hist [[0,1],[1,24],[2,145],[3,319],[4,240],[5,57],[6,6]]
-proof par-map n=28: 3718 positions / 63382 actions · max par 7 from 3,3,3,3,3,3,3,3,3,1 · hist [[0,1],[1,33],[2,298],[3,1055],[4,1461],[5,713],[6,144],[7,13]]
-proof shoal n=6: par 2 = forward 2 = reverse 2 over 11 positions / 42 edges (closed yes) · 只发牌 3 步
-proof linked n=10: par 3 = forward 3 = reverse 3 over 42 positions / 266 edges (closed yes) · 只发牌 6 步
-proof twined n=15: par 4 = forward 4 = reverse 4 over 176 positions / 1645 edges (closed yes) · 只发牌 10 步
-proof master n=21: par 5 = forward 5 = reverse 5 over 792 positions / 10225 edges (closed yes) · 只发牌 15 步
-proof master n=28: par 6 = forward 6 = reverse 6 over 3718 positions / 63382 edges (closed yes) · 只发牌 21 步
-proof master n=12: par 4 = forward 4 = reverse 4 over 77 positions / 576 edges (closed yes) · 只发牌 10 步
-proof master n=18: par 5 = forward 5 = reverse 5 over 385 positions / 4271 edges (closed yes) · 只发牌 15 步
-```
+**旧代码错在哪**
 
-每档 par 区间（构建期实测，写进 `js/data/lots.js` 的 `TIERS_META`）：shoal 2-3、linked 3-4、twined 4-4、master 5-5；
-只发牌步数区间：3-5 / 4-10 / 5-13 / 5-37。接受率 9.2%，拒绝原因计数见上；`master` 只凑到 7/8 关，
-因为该档要求 `par 5-7` 且四种牌量（21/28/12/18）都要有开局，能过带的开局数量有限（这是带定义的自然结果，不是生成器失败）。
-
-复现命令：`node tools/bake.mjs`（同一份代码两次跑出同一批 27 关，只有 `BAKED_AT` 时间戳一行不同）。
-
-计时类数字（随机器与负载漂移，与上面的结构量分开看）：`bake` 全量 0.8–1.4s；单次搜索最大状态数 1692；
-`parProof` 最慢一档 311–533ms；`#/daily` 现场生成 8 个日期平均 13ms / 最坏 36ms；`master` 档出题最坏 137ms；
-浏览器里一次 `reSolve` 20–42ms；一次提示 27ms / 1571 状态。
-
-## 改动表（先写错在哪 → 为什么对）
-
-| 曾经的错误 | 错在哪 | 为什么现在是对的 | 证据 |
-| --- | --- | --- | --- |
-| 发牌规则写成"新堆 = 处理后的堆数"或忘了丢空堆（前两位建造者在这里翻过两次车） | 阶梯不再是不动点，收敛数字全部对不上锚点 | `deal()` 逐字按 `count = piles.length; piles = piles.map(p=>p-1).filter(p=>p>0); piles.push(count)`；另有重数向量版 `dealByCounts()` 独立复算 | `node test/deal.test.mjs` 前 5 行（含 `deal([1,1,1])=[3]`、`deal([2,2,1,1])=[4,1,1]`、阶梯是不动点、4742 个局面两路相等） |
-| `.curtain { display: grid }` 覆盖了 `[hidden]` | 胜利卡片一直透明地盖在画布上吃掉所有指针事件；注入 JS 改状态的测试完全看不出来 | 加 `.curtain[hidden]{display:none}`（`.toast` 同）；现在真实鼠标点击走完整条认证解 | `@pointer` 19 行 fail 0（改之前 9 行 fail），`bash tools/verify.sh` |
-| `cardPoint()` 返回整张牌中心，而命中判定按可见带（牌是叠着的，`cardH > step`） | 台架拖"最上面那张牌"实际拖在了下一张上，拆点错位 | `cardMid()` 返回可见带中心，`hit()` 与 `cardPoint()` 用同一个模型；指针段现在还逐手势核对棋盘 | `@pointer` 的 "and every gesture landed where the certified position says" 一行 + `dragging the top card of a pile is not a split` |
-| 测试把 `distanceMap` 的 `dist` 数组按字符串 key 索引（`dist['10']` 被当成下标 10） | 看起来像"求解器给出了更短的 par" | core 返回 `byKey` 映射，测试用 `m.byKey.get(key(start))`；**这是测试期望错，不是实现错** | `node test/solve.test.mjs` "the map is a real measurement"（42 个开局逐一相等） |
-| 手写期望 `deal([4,1,1]) == [3,2,1]` | 算错了：3 堆 → 新堆是 3，两张单牌抽空后消失，结果 `[3,3]` | 修的是测试里的期望值与随后的 par/grade 路线，代码未动 | `node test/game.test.mjs`（12 行 fail 0） |
-| 期望"10 个单牌只发牌要 10 步" | 第一次发牌把 10 张聚成 `[10]`，单堆 `T_k` 只要 `T_{k-1}` 步，合计 7 | 闭式 `1,3,6,10,15,21` 现在是一条独立断言，与模拟逐一对账 | `node test/deal.test.mjs` "a single pile of T_k cards needs T_(k-1) deals" |
-| 难度带一开始定为 `par ≥ 2` | 出厂关卡全挤在最易一档，"band"没有测量含义 | 先用 `distanceMap` 打出 `p(n)` 个开局的完整 par 直方图，再把带定在直方图上半部；带是结果不是愿望 | `node tools/bake.mjs` 的 `par-map ... hist` 五行 + `test/library.test.mjs` 的 `TIERS_META` 对账 |
-| 派单文字里的 "for n=12 (78 cards): all 77 partitions cycle" | `78 = T_12` 与 `77 = p(12)` 被串成一句，按字面无法同时成立 | 按规格 `b3-staircase.md` 实现反面情形：**12 张牌**的 77 个分拆全部周期（`cycles=77, other=0`）；没有为了凑 78 去改期望值 | `node test/deal.test.mjs` 的 n=12 那一段（states/cyclic/open/withPreperiod/cycleLengths 五项） |
-| `hashSeed` 被称作 FNV-1a | 它是 FNV-1a 派生的两轮 UTF-16 混合，`hashSeed('a')=723832900 ≠ 3826002220` | 文档照实写，测试断言自洽值并显式断言"不等于公开向量" | `node test/make.test.mjs` 前 4 行 |
-
-## 验收结论
-
-原样粘贴本仓实跑输出：
+这一条不是并线带进来的——用 `git worktree add --detach /tmp/stair-ours 864146f^1` 在
+**并线前**那一侧跑同一个闸，`@pointer` 同样 6 条红：
 
 ```
-$ npm run check
-> staircase@1.0.0 check
-> for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" || exit 1; done && echo OK
-OK
+FAIL gesture 1 (deal) costed exactly one operation
+FAIL the mouse plays the whole certified route, one operation per gesture
+FAIL and every gesture landed where the route says
+FAIL the last gesture lands the staircase and cannot be repeated
+FAIL the win card goes up with three stars
+FAIL the run is on record at par
 ```
 
-```
-$ node --test test/
-ℹ tests 8
-ℹ pass 8
-ℹ fail 0
+根因在产品自己的一个**要留**的行为上：第一次打开这台设备（一个记录都没有）时，
+`js/main.js:545`（`showHelp`）会把玩法说明摊在盘上。说明面板是 `position:absolute; inset:0`
+的整层，点它自己的空白处就关掉它（`js/main.js:480` 的 `helpcard` 那个 click 处理写的就是
+"点到面板自己就关"）。而 `@pointer` 段的第一根合成手指落在**发牌块**上——
+发牌块在盘面左上角，说明本体的 620px 卡片是居中的，所以那一点落在面板的空白处：
+这一下被面板吃掉了，"点发牌块"变成"把说明关掉"，路线从此对不上。
 
-$ for f in test/*.test.mjs; do node "$f" | tail -1; done
-deal.test.mjs      rows: 16 fail: 0
-game.test.mjs      rows: 12 fail: 0
-library.test.mjs   rows: 12 fail: 0
-make.test.mjs      rows: 13 fail: 0
-partition.test.mjs rows: 14 fail: 0
-repo.test.mjs      rows: 19 fail: 0
-solve.test.mjs     rows: 17 fail: 0
-storage.test.mjs   rows: 8 fail: 0
-                                     合计 111 行 / 0 失败
-```
+于是这条腿在量"鼠标能不能把认证路线走完"，实际量到的是"第一根手指点到了说明面板的空白处"。
+后面十几条与鼠标有关的断言也跟着一起废掉（它们的前置是"第一下点中了"）。
+
+**新代码为什么对**
+
+修法在**闸**这一侧，不在产品这一侧：产品那个"第一次打开摊开说明"是要留的行为
+（说明里写的键就是下面那套键盘处理），删它才是拿功能换分数。
+node 侧那套（`test/shell.test.mjs`）早就是这么做的——它的执行计划第一件事就是 `closehelp`。
+浏览器段补上同一口径（`tools/playtest.mjs:199-220` 的 `closehelp`）：先把说明按玩家会按的
+那个按钮关掉，再钉一条**前提**——手指要点的那个位置上，最上面的元素必须就是画布本身
+（`tools/playtest.mjs:220` 的 `the board is the top element`）。
+这条把"手指点得到盘"从"手势结果对不对"里拆出来单独钉住：以后再有什么浮层盖上来
+（升级提示、结算卡、公告），红的是这一条，而不是一路红到"认证路线走不完"那种看不出所以然的地方。
+
+`@pointer` 段 19 → 20 条，浏览器腿 `13/13/14/12/19` → `13/13/14/12/20`。
+
+## 9. 真实文件清单（本次动过的 9 个文件）
+
+| 文件 | 动了什么 | 为什么 |
+| --- | --- | --- |
+| `js/view.js` | 删一处重复声明 + 死代码 `ringPhase`；描边环相位改走 `animClock`；setter 合一 | 重复声明是 SyntaxError，整局不可玩 |
+| `js/main.js` | 删远端侧 `bindFullscreen` IIFE 与第二套动效监听；能力并入本地那套；F 键加 `repeat` 守卫 | 一次点击走两条路；按键连切 |
+| `index.html` | 删重复的全屏入口与重复的 manifest link；`<head>` 去重；`og:image` 改绝对 URL；补 favicon-48/64；删 `sw-register.js` 的 script 标签 | 两个 manifest link；分享卡片 404；SW 注册两遍 |
+| `manifest.webmanifest` | 还原本地那版（文件图标 + 全套元信息） | 门禁要求图标在盘上；远端那版丢了 shortcuts 与 maskable 512 |
+| `sw.js` | 还原本地那版（`VERSION='staircase-v1'` + SHELL 预缓存 + 导航兜底） | `test/pwa.test.mjs` 是照它写的 |
+| `js/sw-register.js` | 删除 | 与 `js/pwa.js` 的注册重复 |
+| `test/repo.test.mjs` | 补 `import { spawnSync } from 'node:child_process'` | 并线加了用例体没加 import |
+| `tools/playtest.mjs` | `@pointer` 段先关掉第一次打开的说明，再钉"手指落点上面是画布" | 闸把鼠标腿自己废掉了 |
+| `tools/deploy-set.mjs` | 三对常量重钉（41 / 69 / 24） | 并线改了页面与产物，钉的是实数 |
+| `README.md` | 25 处行号重钉 + 若干处"现在说了假话"的句子改成真的 | 文档要指得到真的那几行 |
+
+## 10. 删行审计
+
+`git diff --stat 10f347f aed596c`：10 files changed, 256 insertions(+), 278 deletions(-)。
+
+删掉的行逐块点名（**没有一块是功能**）：
+
+| 删掉的东西 | 为什么可以删 |
+| --- | --- |
+| `js/view.js` 重复的 `let reduceMotion = false;` 与死代码 `ringPhase` | 重复声明是 SyntaxError；`ringPhase` 并线后无人调用 |
+| `js/view.js` 两个 setter 里的一个 | 两个 setter 改同一个状态，留闸调的那个 |
+| `js/main.js` 远端侧 `bindFullscreen` IIFE 整段 | 与本地那套重复；能力已并入，重复入口也删了 |
+| `js/main.js` 远端侧第二套 `motionQuery` / `applyReduceMotion` / 监听 | 两套路径各改一份状态 |
+| `index.html` 重复的 `<link rel="manifest">`、重复的 og/twitter 元信息、重复的全屏入口 | 同一件事写两遍，H 段数出的标签条数因此翻倍 |
+| `manifest.webmanifest` 四段内联 base64 图标（300 kB 起） | 本仓的图标在盘上，门禁要的就是在盘上 |
+| `js/sw-register.js` 整份 | 与 `js/pwa.js` 的注册重复 |
+| `sw.js` 远端侧整份 | 换成本地那版，不是删功能 |
+| README 里那 25 处旧行号与若干处旧读数 | 改钉，不是改断言强度 |
+
+## 11. 验收命令与原样输出
 
 ```
-$ SKIP_UNIT=1 bash tools/verify.sh
-=== node suites ===
+$ cd z-biz-game-staircase-cos && bash tools/verify.sh
+...
+--- test/deal.test.mjs      rows: 16 fail: 0
+--- test/game.test.mjs      rows: 12 fail: 0
+--- test/library.test.mjs   rows: 12 fail: 0
+--- test/make.test.mjs      rows: 13 fail: 0
+--- test/partition.test.mjs rows: 14 fail: 0
+--- test/pwa.test.mjs       rows: 10 fail: 0
+--- test/repo.test.mjs      rows: 24 fail: 0
+--- test/shell.test.mjs     rows:  9 fail: 0
+--- test/solve.test.mjs     rows: 17 fail: 0
+--- test/storage.test.mjs   rows: 12 fail: 0
+--- test/view.test.mjs      rows:  9 fail: 0
 opened http://127.0.0.1:5212/
 (no console output)
 boot lot: shoal-01
-=== @boot ===
-rows: 13 fail: 0
-=== @play ===
-rows: 13 fail: 0
-=== @routes ===
-rows: 14 fail: 0
-=== @save ===
-rows: 12 fail: 0
-=== @pointer ===
-rows: 19 fail: 0
+=== @boot ===      rows: 13 fail: 0
+=== @play ===      rows: 13 fail: 0
+=== @routes ===    rows: 14 fail: 0
+=== @save ===      rows: 12 fail: 0
+=== @pointer ===   rows: 20 fail: 0
 === console ===
 (none)
+=== deploy-set ===
+部署集：41 条引用（含 5 张位图尺寸核对），失败 0 项
+rows: 69 fail: 0
+DS_SELFTEST rc=0（0=每一刀都按预期发力、阴性对照按预期不发力）
+DS_SELFTEST_BASELINE 部署集：41 条引用（含 5 张位图尺寸核对），失败 0 项 rows=69
 === ALL GREEN ===
 ```
 
-浏览器层 71 行合计 0 失败；`@pointer` 段全部走 CDP `Input.dispatchMouseEvent` / `dispatchKeyEvent`
-真实事件（点发牌块=一次发牌、点两堆=一次并堆、按住某张牌下拖=一次拆堆），
-断言包含：整条认证解用鼠标走完、逐手势核对棋盘、原地按下不计数、裸桌面点击与拖拽不计数、
-抓最上面那张牌不拆分、九倍过拖仍只算一步且拆在抓的那张、终点判定与三颗星、存档落盘 `staircase.save.v1`、
-清空存档要两次点击。
+`RC=0`。node 侧 11 个套件合计 148 条断言、浏览器侧 5 档合计 72 条断言，全部 `fail: 0`，
+控制台 `(none)`，部署集双闸 41 条引用 / 69 条断言 0 失败、台架 rc=0。
 
-`verify.sh` 共跑了 4 次（第 1 次暴露模块导出名写错与 `@routes` 正则转义错，第 2 次暴露 `.curtain` 吞事件，
-第 3 次暴露 `cardPoint` 命中带错位，第 4 次 ALL GREEN）；每次都用独立 `mktemp -d` profile，结束后
-`pgrep -f "remote-debugging-port=9353"` 与 `pgrep -f "server.cjs 5212"` 都确认没有残留进程。
-截图 5 张：`/tmp/puzzle-brief/shots/stair-{boot,play,routes,save,pointer}.png`。
+`node --test test/*.test.mjs` 另跑一遍：`# tests 11`、`# pass 11`、`# fail 0`。
 
-## 未实现清单
+## 12. 行为变化需知会
 
-* `DESIGN.md` 第 6 节的计时表来自一次性脚本 `/tmp/stair-bench.mjs`（未入库，因为它只读 core 的公开函数、
-  不属于任何验收门）。数字是那一次实测，换机器会变；结构量（关卡表、穷举锚点）不受影响。
-  若维护者要复算：对 `dailyLot / reSolve / hint / makeLotTrying` 各计时一轮即可。
-* `electron/main.cjs` 在，但 electron 不是依赖（零依赖硬约束），`npm run electron` 需要维护者自备 electron；
-  受支持的路径是 `npm run dev` 与 `bash tools/verify.sh`。
-* 没有 `test/balance.mjs`（gridlock 有）：本仓的难度表不是抽样统计，而是 `distanceMap` 对 `p(n)` 个开局的
-  **全量**直方图，直接打印在 `bake` 输出里，因此不需要单独的平衡脚本。
-* `master` 档出厂 7 关而非 8 关（能同时满足"带 5-7"和"四种牌量都有开局"的候选有限）；
-  `bake` 打印了 `note:` 而没有静默，也没有为了凑数放宽带。
-* 每日题的日期分档由 `hashSeed("daily-date|" + day)` 选档，未做"某天完全不出题"的空档处理：
-  实测 8 个日期全部出题成功（`ok`），若未来带定义变严导致某天空档，`resolve()` 会回落到战役第一关并打印标签。
-* 未做：牌面图案素材、动画过渡、多人/在线、任何后端服务。
+1. **减弱动效的初值变了**：原先初值恒为 `false`（先按"有动效"画一帧再被系统设置改掉），
+   现在直接读 `matchMedia`——系统里开着减弱动效的玩家，第一帧就是静态的。
+2. **描边环在暂停时停住了**：相位改走虚拟秒，暂停时环不再呼吸。
+3. **F 键不再连切**：按住不放只切一次。
+4. **`window.staircase.setReduceMotion` 改名为 `setReducedMotion`**：这是活下来的
+   `test/view.test.mjs` 调的那个名字。旧的 `setReduceMotion` 不再存在
+   （并线后两个都在，是并线拼出来的）。
+5. **分享卡片现在指绝对 URL**：`og:image` 从 `assets/art/og-cover-1200x630.png` 改成
+   `https://z-biz-game.github.io/z-biz-game-staircase-cos/assets/art/og-cover-1200x630.png`。
+6. **service worker 的缓存名**回到 `staircase-v1`（并线后是 `staircase-cos-v1`），
+   预缓存的清单回到五件套（并线后只有两件）。
+7. **service worker 只注册一次**（走 `js/pwa.js` 那一路，带 `file://` 与 null 守卫）。
 
-## 线上验收（GitHub Pages，主代理 2026-09-27 实抓）
+## 13. 未实现 / 需人接手
 
-发布 sha `fd0fe15`，CI trigger `01f5be0` → Actions `success`。
+1. **部署集闸的 X13 那一把在本仓是 SKIP**：它要清单里真有一段内联 base64 位图，
+   而本仓的清单图标是 `icons/` 里的真文件 ⇒ 台架打印
+   `X13 SKIP · manifest 里没有内联 data:image/png 图标（这一仓的位图都是文件）`。
+   P 段改由 X7 证（把 `icons/icon-192.png` 的声明改成 256x256 必须被点名，实跑确实点了名）。
+2. **线上站点没验过**：本轮只跑了本地闸，没有对
+   `https://z-biz-game.github.io/z-biz-game-staircase-cos/` 做任何网络核对。
+   README 里那份部署前缀声明是**写给闸读的**，不是"站点已上线"的读数。
+3. **闸的"浏览器层条数"仍然没有地板**：`verify.sh` 只打印 `rows:` 与 `fail:`，
+   `fail` 为空就退 0。这条不变（是仓里既有的选择，不是本轮引入的）。
+4. **`@boot` / `@play` / `@routes` / `@save` 四段仍然在说明面板可能摊开的状态下跑**：
+   本轮只补了 `@pointer`（唯一一段靠鼠标点击的）。那四段量的是状态与键盘，不受浮层影响；
+   但若以后有浮层盖住键盘焦点，那四段要照 `@pointer` 的办法各自补一次。
 
-| 资源 | 结果 |
-| --- | --- |
-| `/`（index.html） | 200 / 4,027 B |
-| `js/main.js` | 200 / 15,934 B |
-| `css/game.css` | 200 / 5,700 B |
-| `js/data/lots.js` | 200 / 11,097 B |
-| `<title>` | `保加利亚梯 · BULGARIAN`，与 README 首行一致 |
+## 14. 基线归因（并线后基线 vs 并线前）
 
-主代理自己的门禁实跑（不采信任何转述）：`npm run check` rc=0；node **111 条 / 0 失败**；
-浏览器 **71 条 / 0 失败** 且 `=== ALL GREEN ===` 退出 0；zero-deps、0 个二进制资产、
-core purity clean、无幽灵导出、无密钥样式串。
+用 `git worktree add --detach /tmp/stair-ours 864146f^1`（并线**前**那一侧）与
+`/tmp/stair-pre`（并线后 `10f347f`）在**同一台机器**上跑同一批闸：
 
-发布前主代理对本仓动过两处代码，记录在此以免来源被误认：`js/core/partition.js` 里的
-`MAX_N` 与 `isSortedDesc` 被删除。判定依据是全仓（`js` `test` `tools`，含 partition.js 自身）
-对这两个名字**零引用**，且 README/DESIGN/deliverable 三份文档从未提到它们（grep 核对），
-所以删除不改变任何行为、也不产生文档漂移。门禁当时正是以 `ghostExports` 拒绝本仓的。
+| 腿 | 并线前（`864146f^1`） | 并线后（`10f347f`） | 归因 |
+| --- | --- | --- | --- |
+| `node --check js/view.js` | 通过 | **SyntaxError: Identifier 'reduceMotion' has already been declared** | 并线引入（整局级） |
+| `test/view.test.mjs` | 通过 | 绿（两个 setter 都在，恰好蒙对） | 并线引入（隐患） |
+| `test/pwa.test.mjs` | 通过 | 红（`sw.js` 与用例不同源） | 并线引入 |
+| `test/repo.test.mjs` | 通过 | 红 5 项（spawnSync / manifest / 4 处越界 / 40 处锚点漂） | 并线引入 |
+| `tools/deploy-set.mjs` | 不存在（远端侧才有这套闸） | 红 4 项（H4 / R7 / R12 / R13） | 并线引入 |
+| 浏览器 `@pointer` 段 | **红 6 条**（第一次打开的说明吃掉了第一根手指） | 红 6 条 | **并线前就有**，本轮修掉 |
+| `node --test test/*.test.mjs` | 通过 | 11 套件里 3 个红 | 并线引入 |
 
-另需说明：本仓的构建会话在报告里**修正了主代理派单里两处写错的锚点**——
-`T_3/T_6/T_10/T_15` 实际指 n=3/6/10/15（n=6 的最差是 6 步而不是 2 步），
-以及"n=12（78 张牌）77 个分拆"混淆了 `T_12=78` 与 `p(12)=77`。两处都按规格重算后按事实落地，
-没有为了通过测试而放宽期望。
+## 15. 上一轮留下的记录（转述，不是本轮读数）
+
+本文件替换的是上一轮那份交付报告。下面这几条是上一轮记下的事实，**都不是本轮的读数**，
+写在这里是为了不让它们随文件一起消失（README 里那几处引用指着它们）：
+
+* 派单文档 `b3-staircase.md` 曾经被 `DESIGN.md:116` 与上一轮那份交付报告引用过；
+* 2026-09-27 主代理实抓过线上站点的四个 200，发布 sha 是 `fd0fe15`——那是一次人工核对，
+  不是任何一道门的读数，本轮没有重跑；
+* 出厂关卡文件 `js/data/lots.js` 线上抓到的是 11,097 B（与仓里那份同大小，`BAKED_AT` 那行为空时
+  `diff` 忽略）；本轮重新量过，仓里那份仍是 11,097 B；
+* `MAX_N` 这类"牌量上限"常量在发布前已被删除——"上限 28"现在只由 `test/make.test.mjs` 的档位表保证，
+  引擎本身对任何正整数都算得动；
+* 出题计时表（平均 13 ms / 最坏 36 ms 那张）的来源脚本**没有入库**，是一次性脚本；
+* 桌面形态的 `npm run electron` 在 `package.json:10`（`electron`）里是个脚本，
+  但 electron **不是**依赖（`package.json:32-33` 的 `dependencies` 两个 `{}`），
+  `electron/main.cjs:1-4` 的 `dependency` 自己写明了这一点；本轮同样没跑过它。
