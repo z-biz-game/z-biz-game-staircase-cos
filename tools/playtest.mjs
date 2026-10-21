@@ -197,6 +197,28 @@ async function pointerScenario(cdp, sessionId, runJS) {
   await runJS(`window.stair.load('#/c/1'); 'ok'`);
   await sleep(260);
 
+  // 第一次打开这台设备会把玩法说明摊在盘上（这是产品自己的行为，不是 bug），而下面每一个
+  // 手势都是一根合成的手指点在画布上：说明面板还在的时候，第一根手指点到的是面板的底
+  // （点空白处关面板），于是"手指点了发牌块"变成"手指把说明关了"——闸会报"鼠标什么也没做"，
+  // 而这件事跟鼠标一点关系都没有。node 侧那套（test/shell.test.mjs）第一件事就是 closehelp，
+  // 这里是同一口径：先把说明按玩家会按的那个按钮关掉。
+  //
+  // 关完还钉一条**前提**：手指要点的那个位置上，最上面的元素必须就是画布本身。
+  // 这条不是多余的重复——它把"手指点得到盘"这件事从"手势结果对不对"里拆出来单独钉住，
+  // 以后再有什么浮层盖上来（升级提示、结算卡、公告），红的是这一条，而不是一路红到
+  // "认证路线走不完"那种看不出所以然的地方。
+  if (await runJS(`window.stair.state.helpOpen`)) {
+    await runJS(`document.getElementById('closehelp').click(); 'ok'`);
+    await sleep(140);
+  }
+  const covered = await runJS(`(() => {
+    const p = window.stair.deckPoint();
+    if (!p) return 'no deck point';
+    const e = document.elementFromPoint(p.x, p.y);
+    return e && e.id === 'board' ? '' : (e ? e.tagName + '#' + e.id : 'null');
+  })()`);
+  rec('the board is the top element where the finger is about to land', covered === '', { covered });
+
   const missing = await runJS(`['deal','undo','hint','restart','share','curtain','stars','shelf','wipe','board','readout','backend'].filter((i) => !document.getElementById(i))`);
   rec('every control the shell reaches for exists', missing.length === 0, missing);
 
