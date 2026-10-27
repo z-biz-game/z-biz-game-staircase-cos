@@ -6,3 +6,4 @@ dist/
 _site/
 chrome-profile-*/
 _scratch/
+_tmp-*
