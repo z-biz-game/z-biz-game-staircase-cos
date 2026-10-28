@@ -231,8 +231,8 @@ README 里另外几处现在也说了假话，一并改成真的：
   套件数（8 → 11）、语法门扫到的文件数（27 → 33）；
 * `node --test test/` 这个写法在本机 node 22.22.3 上**跑不起来**（它把 `test/` 当模块解析，
   报 `Cannot find module '.../test'`），能跑的是 `node --test test/*.test.mjs`（11 pass / 0 fail）；
-* 部署集闸那三对常量随并线后的产物重钉：`EXPECT_CHECKS` 29→41、`EXPECT_ROWS` 53→69、
-  `EXPECT_HEAD_TAGS` 14→24（`tools/deploy-set.mjs:38` 的 `EXPECT_CHECKS`）。
+* 部署集闸那三对常量随并线后的产物重钉：`EXPECT_CHECKS` 29→41→43、`EXPECT_ROWS` 53→69→71、
+  `EXPECT_HEAD_TAGS` 14→24→26（后一档是 2026-10-28 跟上 art 批次）（`tools/deploy-set.mjs:38` 的 `EXPECT_CHECKS`）。
 
 ## 8. 浏览器闸的 `@pointer` 段：并线前就已经是红的
 
@@ -333,10 +333,10 @@ boot lot: shoal-01
 === console ===
 (none)
 === deploy-set ===
-部署集：41 条引用（含 5 张位图尺寸核对），失败 0 项
+部署集：43 条引用（含 5 张位图尺寸核对），失败 0 项
 rows: 69 fail: 0
 DS_SELFTEST rc=0（0=每一刀都按预期发力、阴性对照按预期不发力）
-DS_SELFTEST_BASELINE 部署集：41 条引用（含 5 张位图尺寸核对），失败 0 项 rows=69
+DS_SELFTEST_BASELINE 部署集：43 条引用（含 5 张位图尺寸核对），失败 0 项 rows=69
 === ALL GREEN ===
 ```
 
