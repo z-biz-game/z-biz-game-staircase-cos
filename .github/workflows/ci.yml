@@ -31,6 +31,12 @@ jobs:
           node-version: 22
       - name: Syntax
         run: npm run check
+      # 桌面打包图标（assets/build/*.png|.icns|.ico）是**生成物**，不入库：
+      # assets/gen/gen_art.py 用标准库重画一遍，逐字节与入库前的版本一致
+      # （本机实测三件 shasum 全等），所以「不入库」不会丢信息。
+      # 单测（test/repo.test.mjs）要按字节量这些图标 ⇒ 先画再跑套件。
+      - name: Generate desktop icons (byte-reproducible)
+        run: python3 assets/gen/gen_art.py
       - name: Suites
         run: npm run unit
       # 部署集闸：按 tools/assemble-site.sh 那份清单真拷一遍产物，要求页面会去要的东西
